@@ -1,11 +1,15 @@
 from django.contrib import admin
 from .models import Team, Exercise, Membership, Submission, Workbook
 
-# Register your models here.
-admin.site.register(Team)
+@admin.register(Team)
+class TeamAdmin(admin.ModelAdmin):
+    list_display = ['pk', 'name', 'detail']
 admin.site.register(Exercise)
-admin.site.register(Membership)
-# admin.site.register(Submission)
+
+@admin.register(Membership)
+class MembershipAdmin(admin.ModelAdmin):
+    list_display = ['pk', 'user', 'team', 'isStaff']
+
 @admin.register(Submission)
 class SubmissionAdmin(admin.ModelAdmin):
     list_display = ['pk', 'user', 'exercise', 'dateSubmit']
