@@ -18,7 +18,7 @@ class Exercise(models.Model):
     title = models.CharField(max_length=255) # require
     instruction = models.TextField(default='', blank=True)
     created = models.DateTimeField(auto_now_add=True)
-    updated = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
     source_code = models.TextField(default='', blank=True)
     owner = models.ForeignKey(to=User, on_delete=models.CASCADE)
 
@@ -51,10 +51,11 @@ class Submission(models.Model):
     
 # Workbook = Exercise + Team
 class Workbook(models.Model):
-    openTime = models.DateTimeField()
-    dueTime = models.DateTimeField(blank=True)
+    openTime = models.DateTimeField(blank=True, null=True)
+    dueTime = models.DateTimeField(blank=True, null=True)
     isOpen = models.BooleanField(default=True)
     exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE, related_name='workbooks', related_query_name='workbook')
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='workbooks', related_query_name='workbook')
+    week = models.IntegerField(default=0)
     
     

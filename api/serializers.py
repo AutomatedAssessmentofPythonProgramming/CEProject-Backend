@@ -25,7 +25,7 @@ class TeamSerializer(FlexFieldsModelSerializer):
 class ExerciseSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = Exercise
-        fields = ['id', 'title', 'instruction', 'created', 'source_code', 'owner', 'updated']
+        fields = ['id', 'title', 'instruction', 'created', 'source_code', 'updated']
         expandable_fields = {
           'submissions': ('api.SubmissionSerializer', {'many': True}),
           'workbooks': ('api.WorkbookSerializer', {'many': True}),

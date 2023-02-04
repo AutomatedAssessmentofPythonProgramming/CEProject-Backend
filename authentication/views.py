@@ -17,7 +17,8 @@ from .serializers import (RegisterSerializer,
                           LoginSerializer,
                           ResetPasswordEmailRequestSerializer,
                           SetNewPasswordSerializer,
-                          LogoutSerializer
+                          LogoutSerializer,
+                          ProfileSerializer,
                           )
 from .models import User
 from .utils import Util
@@ -154,3 +155,16 @@ class LogoutAPIView(generics.GenericAPIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
         else:
             return Response(status=status.HTTP_400_BAD_REQUEST)
+
+class ProfileView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = ProfileSerializer
+    
+    def get(self, request):
+        try:
+            user = User.objects.get(id=request.user.id)
+        except User.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        serializer = ProfileSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
