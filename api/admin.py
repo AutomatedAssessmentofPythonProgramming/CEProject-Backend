@@ -4,7 +4,10 @@ from .models import Team, Exercise, Membership, Submission, Workbook
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
     list_display = ['pk', 'name', 'detail']
-admin.site.register(Exercise)
+
+@admin.register(Exercise)
+class ExerciseAdmin(admin.ModelAdmin):
+    list_display = ['pk', 'title', 'created', 'updated', 'owner']
 
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):

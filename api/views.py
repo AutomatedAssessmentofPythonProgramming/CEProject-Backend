@@ -1,9 +1,11 @@
-from .models import Team, Exercise, Membership, Workbook
+from .models import Team, Exercise, Membership, Workbook, Submission
 from authentication.models import User
 from .serializers import (TeamSerializer, 
                           ExerciseSerializer, 
                           TeamMemberSerializer, 
-                          MemberSerializer
+                          MemberSerializer,
+                          FileUploadSerializer,
+                          MultiFileUploadSerializer,
                           )
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_flex_fields import is_expanded
@@ -11,9 +13,17 @@ from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet, ViewSet
 from rest_framework.views import APIView
 from rest_framework import permissions, response, status, generics
 from rest_framework.decorators import action
+from rest_framework.parsers import FileUploadParser, MultiPartParser
+from rest_framework.response import Response
+
+from django.core.files.storage import default_storage
 
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+
+import os 
+import subprocess
+import json
 
 class TeamViewSet(FlexFieldsMixin, ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -62,11 +72,13 @@ class ListTeamView(generics.GenericAPIView):
     Return List of Team that user joined
     '''
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TeamMemberSerializer
     
     def get(self, request):
         try:
             # user = User.objects.get(id=request.user.id)
             # ถ้าไม่มี permissions.IsAuthenticated จะเกิด error ถ้าไม่ authentication ต้อง login ก่อน
+            # find team of member
             memberships = Membership.objects.filter(user=request.user.id)
             teams = []
             for membership in memberships:
@@ -162,6 +174,10 @@ class TeamMemberView(generics.GenericAPIView):
     
     def get(self, request, pk):
         try:
+            isMember = Membership.objects.get(team=pk, user=request.user.id)
+        except Membership.DoesNotExist:
+            return response.Response(status=status.HTTP_400_BAD_REQUEST)
+        try:
             members = Membership.objects.filter(team=pk)
         except Membership.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
@@ -170,7 +186,8 @@ class TeamMemberView(generics.GenericAPIView):
             user_data = {
                 'username': member.user.username,
                 'email': member.user.email,
-                'id': member.user.id
+                'id': member.user.id,
+                'studentid': member.user.studentid,
             }
             members_data.append(user_data)
         return response.Response({'members':members_data}, status=status.HTTP_200_OK)
@@ -247,6 +264,11 @@ class ListExerciseView(generics.GenericAPIView):
             return response.Response(status=status.HTTP_404_NOT_FOUND)
         data = []
         for workbook in workbooks:
+            try:
+                submits = Submission.objects.get(user=request.user.id, exercise=workbook.exercise.pk)
+                isDone = True
+            except Submission.DoesNotExist:
+                isDone = False
             data.append({'dueTime': workbook.dueTime,
                          'openTime': workbook.openTime,
                          'isOpen': workbook.isOpen,
@@ -261,6 +283,166 @@ class ListExerciseView(generics.GenericAPIView):
                                 'instruction': workbook.exercise.instruction,
                                 'created': workbook.exercise.created,
                                 'updated': workbook.exercise.updated,
+                                'isDone': isDone
                             },
                          })
         return response.Response(data, status=status.HTTP_200_OK)
+    
+class ListSubmissionView(generics.GenericAPIView):
+    '''
+    Manage Submission by instructor
+    return json
+    '''
+    permission_classes=(permissions.IsAuthenticated)
+    
+    def get(self, request, pk):
+        try:
+            submissions = Submission.objects.filter(exercise=pk)
+        except Submission.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+        data = []
+        # print(submissions)
+        for submission in submissions:
+            user = submission.user
+            data.append(
+                {
+                    'user': {
+                        'firstname': user.firstname,
+                        'lastname': user.lastname,
+                        'username': user.username,
+                        'email': user.email,
+                        'studentid': user.studentid,
+                    },
+                    'dateSubmit': submission.dateSubmit,
+                    'score': submission.score,
+                }
+            )
+        exercise = submissions[0].exercise
+        exercise_data = {
+            'pk': exercise.pk,
+            'title': exercise.title,
+            'instruction': exercise.instruction,
+            'created': exercise.created,
+            'updated': exercise.updated,
+            'owner': {
+                'email': exercise.owner.email
+                },
+        }
+        return response.Response({'exericse': exercise_data,'data':data}, status=status.HTTP_200_OK)
+
+class SubmissionView(generics.GenericAPIView):
+    '''
+    ดูว่าส่งอะไรไปแล้วบ้าง
+    '''
+    
+    def get(self, request):
+        try:
+            submissions = Submission.objects.filter(user=request.user.pk)
+        except Submission.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+        data = []
+        for submission in submissions:
+            exercise = submission.exercise
+            data.append(
+                {
+                    'exercise': {
+                            'title': exercise.title,
+                        },
+                    'submitDate': submission.dateSubmit,
+                    'score': submission.score,
+                }
+            )
+            
+        return response.Response(data, status=status.HTTP_200_OK)
+ 
+class FileSubmissionView(generics.GenericAPIView):
+    parser_classes = [MultiPartParser]
+    # serializer_class = FileUploadSerializer
+    
+    @swagger_auto_schema(
+        operation_id="upload_file",
+        operation_description="Upload a file",
+        manual_parameters=[openapi.Parameter(
+                            name="file",
+                            in_=openapi.IN_FORM,
+                            type=openapi.TYPE_FILE,
+                            # required=True,
+                            description="Document"
+                            )],
+    )
+    def post(self, request, pk, format=None):
+        serializer = FileUploadSerializer(data=request.data)
+
+        if serializer.is_valid():
+            # Save the uploaded file to the server
+            uploaded_file = serializer.validated_data['file']
+            file_name = uploaded_file.name
+            file_name = default_storage.save(uploaded_file.name, uploaded_file)
+            print("Uploaded file name:", file_name)
+            
+            exercise = Exercise.objects.get(pk=pk)
+            filename = exercise.title
+            code = exercise.source_code
+            config = exercise.config_code
+            unittest = exercise.unittest
+            if config.strip() == '' or unittest.strip() == '':
+                return Response({'error': 'configcode or unittest error'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            with open(filename + '.py', 'w') as outfile:
+                outfile.write(code)
+            with open(filename + '.yaml', 'w') as outfile:
+                outfile.write(config)
+            with open(filename + '_tests.py', 'w') as outfile:
+                outfile.write(unittest)
+                
+            results = 'results.json'
+                
+            cmd = ['python3', '-m', 'graderutils.main', filename+'.yaml', '--develop-mode']
+            with open(results, 'w') as outfile:
+                subprocess.run(cmd, stdout=outfile)
+            with open(results, 'r') as infile:
+                data = json.load(infile)
+                
+            os.remove(filename + '.py')
+            os.remove(filename + '.yaml')
+            os.remove(filename + '_tests.py')
+            os.remove(uploaded_file.name)
+            os.remove(results)
+            
+            return Response(data, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=400)
+        
+class MultiFileUploadView(generics.GenericAPIView):
+    parser_classes = [MultiPartParser]
+    # serializer_class = MultiFileUploadSerializer
+    
+    @swagger_auto_schema(
+        # request_body=MultiFileUploadSerializer,
+        operation_id="upload_multi_files",
+        operation_description="Upload multiple files",
+        responses={200: "Success", 400: "Bad Request"},
+        manual_parameters=[
+            openapi.Parameter(
+                name="files",
+                in_=openapi.IN_FORM,
+                description="Multiple files to upload",
+                type=openapi.TYPE_FILE,
+                required=True,
+                explode=True
+            )
+        ]
+    )
+    def post(self, request):
+        file_serializer = MultiFileUploadSerializer(data=request.data)
+        if file_serializer.is_valid():
+            # Save the uploaded files to the server
+            uploaded_files = file_serializer.validated_data['files']
+            for uploaded_file in uploaded_files:
+                file_name = uploaded_file.name
+                print("Uploaded file name:", file_name)
+                # Do something with the file
+            return Response({'status': 'success'})
+        else:
+            return Response(file_serializer.errors, status=400)
+    

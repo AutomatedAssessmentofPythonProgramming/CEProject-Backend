@@ -7,6 +7,7 @@ class Team(models.Model):
     detail = models.TextField(blank=True)
     created = models.DateTimeField(auto_now_add=True)
     users = models.ManyToManyField(User, through='Membership')
+    # number of exercise
 
     class Meta:
         ordering = ['created']
@@ -20,6 +21,8 @@ class Exercise(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     source_code = models.TextField(default='', blank=True)
+    config_code = models.TextField(default='', blank=True)
+    unittest = models.TextField(default='', blank=True)
     owner = models.ForeignKey(to=User, on_delete=models.CASCADE)
 
     class Meta:
@@ -34,15 +37,18 @@ class Membership(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     isStaff = models.BooleanField(default=False)
+    # isVerified = models.BooleanField(defualt=False)
 
     def __str__(self) -> str:
         return "({}, {})".format(self.user, self.team)
 
-# userExercise
+# Submission = user + exercise + team
 class Submission(models.Model):
+    # team = models.ForeignKey(Team, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='submissions', related_query_name='submission')
     exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE, related_name='submissions', related_query_name='submission')
     dateSubmit = models.DateTimeField(auto_now=True)
+    # isLate = models.BooleanField()
     code = models.TextField(blank=True)
     score = models.IntegerField(default=0)
 

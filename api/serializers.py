@@ -68,3 +68,12 @@ class MembershipSerializer(serializers.ModelSerializer):
 class TeamMemberSerializer(serializers.Serializer):
     team = TeamSerializer()
     member = MemberSerializer()
+
+class FileUploadSerializer(serializers.Serializer):
+  file = serializers.FileField()
+  
+class MultiFileUploadSerializer(serializers.Serializer):
+    files = serializers.ListField(
+        child=serializers.FileField(),
+        allow_empty=False
+    )
