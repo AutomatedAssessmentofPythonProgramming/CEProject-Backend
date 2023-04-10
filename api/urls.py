@@ -25,10 +25,10 @@ urlpatterns = [
     path('team/<int:pk>/members/', TeamMemberView.as_view(), name='team-member'),
     path('exercise/', ExerciseView.as_view(), name='exercise-create'),
     path('exercise/<int:pk>', DetailExerciseView.as_view(), name='exercise-detail'),
-    # path('exercise-list/<int:pk>', ListExerciseView.as_view(), name='exercise-list'),
     path('team/<int:pk>/exercises/', ListExerciseView.as_view(), name='exercise-list'),
-    path('exercise/<int:pk>/members/', ListSubmissionView.as_view(), name='manage-submission'),
     path('submissions-list/', SubmissionView.as_view(), name='submission-list'),
     path('exercise/<int:pk>/submit', FileSubmissionView.as_view(), name='upload-file'),
     path('multi-upload-file/', MultiFileUploadView.as_view(), name='multi-upload-file'),
+    
+    path('submission/<int:exerciseId>/team/<int:teamId>', ListSubmissionView.as_view(), name='manage-submission'),
 ]

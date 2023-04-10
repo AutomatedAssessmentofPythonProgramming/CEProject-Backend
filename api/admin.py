@@ -15,7 +15,7 @@ class MembershipAdmin(admin.ModelAdmin):
 
 @admin.register(Submission)
 class SubmissionAdmin(admin.ModelAdmin):
-    list_display = ['pk', 'user', 'exercise', 'dateSubmit']
+    list_display = ['pk', 'user', 'team', 'exercise', 'dateSubmit']
     
 @admin.register(Workbook)
 class WorkbookAdmin(admin.ModelAdmin):

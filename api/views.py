@@ -85,7 +85,7 @@ class ListTeamView(generics.GenericAPIView):
                 members = Membership.objects.filter(team=membership.team.id)
                 teams.append({'id': membership.team.id, 
                               'name': membership.team.name,
-                              'count': members.count()
+                              'membersCount': members.count()
                               })
             return response.Response({'teams': teams}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
@@ -258,17 +258,12 @@ class ListExerciseView(generics.GenericAPIView):
             members = Membership.objects.get(team=pk, user=request.user.id)
         except Membership.DoesNotExist:
             return response.Response(status=status.HTTP_403_FORBIDDEN)
-        try:
-            workbooks = Workbook.objects.filter(team=pk)
-        except Workbook.DoesNotExist:
-            return response.Response(status=status.HTTP_404_NOT_FOUND)
+        
+        workbooks = Workbook.objects.filter(team=pk)
+        if not workbooks.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
         data = []
         for workbook in workbooks:
-            try:
-                submits = Submission.objects.get(user=request.user.id, exercise=workbook.exercise.pk)
-                isDone = True
-            except Submission.DoesNotExist:
-                isDone = False
             data.append({'dueTime': workbook.dueTime,
                          'openTime': workbook.openTime,
                          'isOpen': workbook.isOpen,
@@ -283,23 +278,23 @@ class ListExerciseView(generics.GenericAPIView):
                                 'instruction': workbook.exercise.instruction,
                                 'created': workbook.exercise.created,
                                 'updated': workbook.exercise.updated,
-                                'isDone': isDone
+                                'isDone': workbook.isDone
                             },
                          })
         return response.Response(data, status=status.HTTP_200_OK)
     
 class ListSubmissionView(generics.GenericAPIView):
     '''
-    Manage Submission by instructor
-    return json
+    Which Team
+    Which exercise
+    want User that submit exercise and get score
     '''
-    permission_classes=(permissions.IsAuthenticated)
+    # permission_classes=(permissions.IsAuthenticated)
     
-    def get(self, request, pk):
-        try:
-            submissions = Submission.objects.filter(exercise=pk)
-        except Submission.DoesNotExist:
-            return response.Response(status=status.HTTP_404_NOT_FOUND)
+    def get(self, request, teamId, exerciseId):
+        submissions = Submission.objects.filter(exercise=exerciseId, team=teamId)
+        if not submissions.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
         data = []
         # print(submissions)
         for submission in submissions:
@@ -355,6 +350,8 @@ class SubmissionView(generics.GenericAPIView):
             
         return response.Response(data, status=status.HTTP_200_OK)
  
+ 
+#  ตรวจ
 class FileSubmissionView(generics.GenericAPIView):
     parser_classes = [MultiPartParser]
     # serializer_class = FileUploadSerializer
@@ -445,4 +442,11 @@ class MultiFileUploadView(generics.GenericAPIView):
             return Response({'status': 'success'})
         else:
             return Response(file_serializer.errors, status=400)
+    
+class WorkbookView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated)
+    
+    def post(self, request):
+        pass
+    
     
