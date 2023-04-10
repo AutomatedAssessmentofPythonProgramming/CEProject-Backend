@@ -1,12 +1,12 @@
-# from rest_framework import serializers
+from rest_framework import serializers
 from rest_flex_fields import FlexFieldsModelSerializer
 from .models import Team, Exercise, Membership, Submission, Workbook
-from django.contrib.auth.models import User
+from authentication.models import User
 
 class UserSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = User
-        fields = ['username', 'email', ]
+        fields = ['id', 'username', 'email', ]
         expandable_fields = {
           'members': ('api.MemberSerializer', {'many': True}),
           'submissions' : ('api.SubmissionSerializer', {'many': True}),
@@ -15,18 +15,17 @@ class UserSerializer(FlexFieldsModelSerializer):
 class TeamSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = Team 
-        fields = ['pk', 'name', 'detail', 'created']
+        fields = ['pk', 'name', 'detail']
         expandable_fields = {
           'users': ('api.UserSerializer', {'many': True}),
           'members': ('api.MemberSerializer', {'many': True}),
           'workbooks': ('api.WorkbookSerializer', {'many': True}),
         }
         
-
 class ExerciseSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = Exercise
-        fields = ['id', 'title', 'instruction', 'created', 'source_code']
+        fields = ['id', 'title', 'instruction', 'created', 'source_code', 'updated', 'config_code', 'unittest']
         expandable_fields = {
           'submissions': ('api.SubmissionSerializer', {'many': True}),
           'workbooks': ('api.WorkbookSerializer', {'many': True}),
@@ -60,3 +59,21 @@ class WorkbookSerializer(FlexFieldsModelSerializer):
           'team': ('api.TeamSerializer'),
           'exercise': ('api.ExerciseSerializer'),
         }
+
+class MembershipSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Membership
+        fields = ('id', 'user', 'team', 'isStaff')
+        
+class TeamMemberSerializer(serializers.Serializer):
+    team = TeamSerializer()
+    member = MemberSerializer()
+
+class FileUploadSerializer(serializers.Serializer):
+  file = serializers.FileField()
+  
+class MultiFileUploadSerializer(serializers.Serializer):
+    files = serializers.ListField(
+        child=serializers.FileField(),
+        allow_empty=False
+    )

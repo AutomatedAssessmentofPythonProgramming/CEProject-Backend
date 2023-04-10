@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import (AbstractBaseUser, BaseUserManager, PermissionsMixin)
 from rest_framework_simplejwt.tokens import RefreshToken
 
+
 class UserManager(BaseUserManager):
     def create_user(self, username, email, password=None):
         if username == None:
@@ -27,12 +28,16 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length = 255, unique = True, db_index=True)
     email = models.EmailField(max_length = 255, unique = True, db_index=True)
+    firstname = models.CharField(max_length=255, blank=True, default='')
+    lastname = models.CharField(max_length=255, blank=True, default='')
+    studentid= models.CharField(max_length=255, blank=True, default='')
     is_verified = models.BooleanField(default=False)
     # !!! carefull set is_active T
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add = True)
     updated_at = models.DateTimeField(auto_now = True)
+    
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
