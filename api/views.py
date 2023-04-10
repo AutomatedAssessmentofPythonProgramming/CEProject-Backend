@@ -6,6 +6,7 @@ from .serializers import (TeamSerializer,
                           MemberSerializer,
                           FileUploadSerializer,
                           MultiFileUploadSerializer,
+                          WorkbookSerializer,
                           )
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_flex_fields import is_expanded
@@ -264,6 +265,13 @@ class ListExerciseView(generics.GenericAPIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         data = []
         for workbook in workbooks:
+            # Check if submit exercise
+            try:
+                submission = Submission.objects.get(user=request.user.id, team=pk, exercise=workbook.exercise.pk)
+                print(submission.isDone)
+                isDone = True if submission.isDone == True else False 
+            except Membership.DoesNotExist:
+                isDone = False
             data.append({'dueTime': workbook.dueTime,
                          'openTime': workbook.openTime,
                          'isOpen': workbook.isOpen,
@@ -278,7 +286,7 @@ class ListExerciseView(generics.GenericAPIView):
                                 'instruction': workbook.exercise.instruction,
                                 'created': workbook.exercise.created,
                                 'updated': workbook.exercise.updated,
-                                'isDone': workbook.isDone
+                                'isDone': isDone
                             },
                          })
         return response.Response(data, status=status.HTTP_200_OK)
@@ -443,10 +451,15 @@ class MultiFileUploadView(generics.GenericAPIView):
         else:
             return Response(file_serializer.errors, status=400)
     
-class WorkbookView(generics.GenericAPIView):
-    permission_classes = (permissions.IsAuthenticated)
+class CreateWorkbooksView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = WorkbookSerializer
     
     def post(self, request):
-        pass
+        serializer = WorkbookSerializer(data=request.data)
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            return response.Response(serializer.data, status=status.HTTP_201_CREATED)
+        return response.Response(status=status.HTTP_400_BAD_REQUEST)
     
     

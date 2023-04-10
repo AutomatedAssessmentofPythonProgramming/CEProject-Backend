@@ -12,6 +12,7 @@ from .views import ( TeamViewSet,
                      SubmissionView,
                      FileSubmissionView,
                      MultiFileUploadView,
+                     CreateWorkbooksView,
                     )
 
 urlpatterns = [
@@ -29,6 +30,7 @@ urlpatterns = [
     path('submissions-list/', SubmissionView.as_view(), name='submission-list'),
     path('exercise/<int:pk>/submit', FileSubmissionView.as_view(), name='upload-file'),
     path('multi-upload-file/', MultiFileUploadView.as_view(), name='multi-upload-file'),
+    path('workbook/', CreateWorkbooksView.as_view(), name='create-workbook'),
     
     path('submission/<int:exerciseId>/team/<int:teamId>', ListSubmissionView.as_view(), name='manage-submission'),
 ]

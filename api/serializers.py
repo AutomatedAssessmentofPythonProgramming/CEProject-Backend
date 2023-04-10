@@ -52,13 +52,20 @@ class SubmissionSerializer(FlexFieldsModelSerializer):
         }
         
 class WorkbookSerializer(FlexFieldsModelSerializer):
+    # openTime = models.DateTimeField(blank=True, null=True)
+    # dueTime = models.DateTimeField(blank=True, null=True)
+    # isOpen = models.BooleanField(default=True)
+    # exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE, related_name='workbooks', related_query_name='workbook')
+    # team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='workbooks', related_query_name='workbook')
+    # week = models.IntegerField(default=0)
+    # dateCreated = models.DateTimeField(auto_now=True)
     class Meta:
         model = Workbook
-        fields = ['openTime', 'dueTime', 'isOpen']
-        expandable_fields = {
-          'team': ('api.TeamSerializer'),
-          'exercise': ('api.ExerciseSerializer'),
-        }
+        fields = ['team', 'exercise', 'week', 'openTime', 'dueTime', 'isOpen', 'dateCreated']
+        # expandable_fields = {
+        #   'team': ('api.TeamSerializer'),
+        #   'exercise': ('api.ExerciseSerializer'),
+        # }
 
 class MembershipSerializer(serializers.ModelSerializer):
     class Meta:
