@@ -1,10 +1,69 @@
 # Backend
 
 ## install && Dependencies
+
 pip freeze > requirements.txt
 pip install requirements.txt
 
-## path
+install grader-utils
+
+        git clone --depth 1 https://github.com/apluslms/python-grader-utils.git
+        cd python-grader-utils
+        pip install .
+
+comment code
+
+setting.py
+
+        INSTALLED_APPS = [
+        ...
+        #'django.contrib.admin',
+        ...
+        ]
+
+api/urls.py
+authentication/urls.py
+
+        urlpatterns = [
+        ...
+        #path('admin/', admin.site.urls) 
+        ...
+        ]
+
+create file .env or env.bat in window
+
+        source .env // call env.bat in window
+
+run migrate database
+
+        python manage.py migrate
+
+uncomment admin
+
+setting.py
+
+        INSTALLED_APPS = [
+        ...
+        'django.contrib.admin',
+        ...
+        ]
+
+api/urls.py
+authentication/urls.py
+
+        urlpatterns = [
+        ...
+        path('admin/', admin.site.urls) 
+        ...
+        ]
+
+run again
+
+        python manage.py migrate
+        python manage.py runserver
+
+## PATH
+
         /api/exercise/
 
 - method post
