@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rest_flex_fields import FlexFieldsModelSerializer
 from .models import Team, Exercise, Membership, Submission, Workbook
 from authentication.models import User
+import uuid
 
 class UserSerializer(FlexFieldsModelSerializer):
     class Meta:
@@ -22,6 +23,22 @@ class TeamSerializer(FlexFieldsModelSerializer):
           'workbooks': ('api.WorkbookSerializer', {'many': True}),
         }
         
+    def create(self, validated_data):
+        # Generate a unique invite code
+        invite_code = str(uuid.uuid4())[:8]
+
+        # Check if the generated invite code already exists
+        while Team.objects.filter(inviteCode=invite_code).exists():
+            invite_code = str(uuid.uuid4())[:8]
+
+        # Assign the unique invite code
+        validated_data['inviteCode'] = invite_code
+
+        # Create the team instance
+        team = Team.objects.create(**validated_data)
+
+        return team
+        
 class ExerciseSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = Exercise
@@ -41,6 +58,33 @@ class MemberSerializer(FlexFieldsModelSerializer):
           'team': ('api.TeamSerializer')
         }
         
+class MembershipSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Membership
+        fields = ('id', 'user', 'team', 'isStaff')
+        
+        
+class InviteCodeSerializer(serializers.Serializer):
+    invite_code = serializers.CharField(max_length=255)
+    
+    def validate_invite_code(self, value):
+        user = self.context['request'].user
+        team = Team.objects.filter(inviteCode=value).first()
+
+        if not team:
+            raise serializers.ValidationError("Invalid invite code")
+
+        if Membership.objects.filter(user=user, team=team).exists():
+            raise serializers.ValidationError("User is already a member of the team")
+
+        return value
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        team = Team.objects.get(inviteCode=validated_data['invite_code'])
+        membership = Membership.objects.create(user=user, team=team)
+        return membership
+    
 class SubmissionSerializer(FlexFieldsModelSerializer):
     class Meta:
         model =  Submission
@@ -52,13 +96,6 @@ class SubmissionSerializer(FlexFieldsModelSerializer):
         }
         
 class WorkbookSerializer(FlexFieldsModelSerializer):
-    # openTime = models.DateTimeField(blank=True, null=True)
-    # dueTime = models.DateTimeField(blank=True, null=True)
-    # isOpen = models.BooleanField(default=True)
-    # exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE, related_name='workbooks', related_query_name='workbook')
-    # team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='workbooks', related_query_name='workbook')
-    # week = models.IntegerField(default=0)
-    # dateCreated = models.DateTimeField(auto_now=True)
     class Meta:
         model = Workbook
         fields = ['team', 'exercise', 'week', 'openTime', 'dueTime', 'isOpen', 'dateCreated']
@@ -67,10 +104,6 @@ class WorkbookSerializer(FlexFieldsModelSerializer):
         #   'exercise': ('api.ExerciseSerializer'),
         # }
 
-class MembershipSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Membership
-        fields = ('id', 'user', 'team', 'isStaff')
         
 class TeamMemberSerializer(serializers.Serializer):
     team = TeamSerializer()
@@ -84,3 +117,35 @@ class MultiFileUploadSerializer(serializers.Serializer):
         child=serializers.FileField(),
         allow_empty=False
     )
+    
+class ExerciseWorkbookSerializer(serializers.Serializer):
+    exercise_title = serializers.CharField(source='exercise.title')
+    exercise_instruction = serializers.CharField(source='exercise.instruction')
+    exercise_source_code = serializers.CharField(source='exercise.source_code')
+    exercise_config_code = serializers.CharField(source='exercise.config_code')
+    exercise_unittest = serializers.CharField(source='exercise.unittest')
+    workbook_open_time = serializers.DateTimeField(source='openTime')
+    workbook_due_time = serializers.DateTimeField(source='dueTime')
+    workbook_is_open = serializers.BooleanField(source='isOpen')
+    workbook_team_id = serializers.IntegerField(source='team.id')
+    workbook_week = serializers.IntegerField()
+    
+    def create(self, validated_data):
+        exercise_data = validated_data.pop('exercise')
+        workbook_data = validated_data
+        exercise = Exercise.objects.create(**exercise_data)
+        workbook = Workbook.objects.create(exercise=exercise, **workbook_data)
+        return workbook
+    
+    def update(self, instance, validated_data):
+        exercise_data = validated_data.pop('exercise')
+        exercise = instance.exercise
+        for attr, value in exercise_data.items():
+            setattr(exercise, attr, value)
+        exercise.save()
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+      
+      

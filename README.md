@@ -70,7 +70,7 @@ run again
 
 create exercise
 
-    /api/exercise/{id}
+        /api/exercise/{pk}
 
 - method get
 
@@ -78,21 +78,13 @@ get an exercise by id
 
 - method patch
 
-modified an exercise specified by id
+updated an exercise specified by id
 
 - mothod delete
 
 delete an exercise by id
 
-        /api/exercise/{id}/members
-
-- method get
-
-get student's submissions have to fix!! 
-
-permission have to be staff
-
-        /api/sibmission-list/
+        /api/submission-list/
 
 - method get
 
@@ -104,7 +96,7 @@ get all our submissions wait to fix!!! submission models
 
 create team
 
-        /api/team/{id}
+        /api/team/{pk}
 
 - method get
 
@@ -112,29 +104,73 @@ get a team by id
 
 - method patch
 
-modify a team by id
+updated a team by id
 
 - method delete
 
 delete a team by id
 
-        /api/team/{id}/exercises
+        /api/team/{pk}/exercises
 
 - method get
 
 get team's exercises through workbooks
 
-        /api/team/{id}/members/
+        /api/team/{pk}/members/
 
 - method get
 
 get team's members through membership
 
-        /api/teams-list/
+        /api/team-list/
 
 - method get
 
-get user's team
+        /api/team/{pk}/exercises
+
+- method get
+
+get exercises of team by teamId
+
+        /api/exercise/{pk}/submit
+
+- method post
+
+submit exercise
+
+        /api/workbook/
+
+- method post
+
+create workbook
+
+        /api/workbook/{pk}
+
+- method get
+
+get exercise by id
+
+- method patch
+
+updated exercise by id
+
+- method delete
+
+delete exercise by id
+
+        /add-member/
+
+- method post
+
+add member to team by using inviteCode
+
+        /submission/{exerciseId}/team/{teamID}
+
+- method get
+
+Get list of user that submit exercises filter by teamId and exerciseId
+
+get user
 
         /auth/register/
         /auth/login/

@@ -7,7 +7,7 @@ class Team(models.Model):
     detail = models.TextField(blank=True)
     created = models.DateTimeField(auto_now_add=True)
     users = models.ManyToManyField(User, through='Membership')
-    inviteCode = models.CharField(max_length=255, default='')
+    inviteCode = models.CharField(max_length=255, unique=True)
     # number of exercise
 
     class Meta:

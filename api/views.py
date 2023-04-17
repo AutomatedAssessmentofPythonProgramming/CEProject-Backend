@@ -7,6 +7,8 @@ from .serializers import (TeamSerializer,
                           FileUploadSerializer,
                           MultiFileUploadSerializer,
                           WorkbookSerializer,
+                          MembershipSerializer,
+                          InviteCodeSerializer,
                           )
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_flex_fields import is_expanded
@@ -25,6 +27,9 @@ from drf_yasg.utils import swagger_auto_schema
 import os 
 import subprocess
 import json
+from tempfile import TemporaryDirectory
+
+from .utils import process_uploaded_file
 
 class TeamViewSet(FlexFieldsMixin, ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -68,9 +73,12 @@ class ExerciseViewSet(FlexFieldsMixin, ReadOnlyModelViewSet):
             
         return queryset
     
+# New Controller  
+
+# Get list of team that joined
 class ListTeamView(generics.GenericAPIView):
     '''
-    Return List of Team that user joined
+    Return List of Team that user is member.
     '''
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TeamMemberSerializer
@@ -84,7 +92,7 @@ class ListTeamView(generics.GenericAPIView):
             teams = []
             for membership in memberships:
                 members = Membership.objects.filter(team=membership.team.id)
-                teams.append({'id': membership.team.id, 
+                teams.append({'pk': membership.team.pk, 
                               'name': membership.team.name,
                               'membersCount': members.count()
                               })
@@ -106,10 +114,6 @@ class CreateTeamView(generics.GenericAPIView):
     def post(self, request):
         serializer = TeamSerializer(data=request.data)
         if serializer.is_valid(raise_exception=True):
-            # team_data = serializer.data
-            # team_serializer = TeamSerializer(data=team_data)
-            # team_serializer.is_valid(raise_exception=True)
-            # team = team_serializer.save()
             team = serializer.save()
             member_data = {"isStaff": True}
             member_serializer = MemberSerializer(data=member_data)
@@ -124,6 +128,7 @@ class CreateTeamView(generics.GenericAPIView):
                                      status=status.HTTP_201_CREATED)
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+# Delete Update Get team by pk
 class DetailTeamView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
     
@@ -170,6 +175,7 @@ class DetailTeamView(generics.GenericAPIView):
         except Team.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
 
+# Get members of team list
 class TeamMemberView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
     
@@ -185,6 +191,7 @@ class TeamMemberView(generics.GenericAPIView):
         members_data = []
         for member in members:
             user_data = {
+                'pk': member.pk,
                 'username': member.user.username,
                 'email': member.user.email,
                 'id': member.user.id,
@@ -193,6 +200,65 @@ class TeamMemberView(generics.GenericAPIView):
             members_data.append(user_data)
         return response.Response({'members':members_data}, status=status.HTTP_200_OK)
     
+# Add member by invite code
+class AddMemberWithInviteCodeView(generics.CreateAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = InviteCodeSerializer
+    
+    @swagger_auto_schema(
+        operation_description="Add Member",
+        responses={
+            201: openapi.Response("Successfully added member to team"),
+            400: openapi.Response("Invalid request"),
+        },
+        request_body=InviteCodeSerializer
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid(raise_exception=True):
+            membership = serializer.save()
+            response_data = {
+                'user_pk': membership.user.pk,
+                'user': membership.user.username,
+                'team_pk': membership.team.pk,
+                'team': membership.team.name,
+                'isStaff': membership.isStaff,
+                'isVerify': membership.isVerify
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        return response.Response(status=status.HTTP_400_BAD_REQUEST)
+
+# Update Remove member from team
+class RetrieveUpdateRemoveMemberView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = MembershipSerializer
+    queryset = Membership.objects.all()
+    
+    def get_object(self, pk):
+        try:
+            return Membership.objects.get(pk=pk)
+        except Membership.DoesNotExist:
+            raise status.HTTP_400_BAD_REQUEST
+
+    def get(self, request, pk):
+        membership = self.get_object(pk)
+        serializer = MembershipSerializer(membership)
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        membership = self.get_object(pk)
+        membership.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def patch(self, request, pk):
+        membership = self.get_object(pk)
+        serializer = MembershipSerializer(membership, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# Create Exercise
 class ExerciseView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
     
@@ -210,7 +276,8 @@ class ExerciseView(generics.GenericAPIView):
             serializer.save(owner=request.user)
             return response.Response(serializer.data, status=status.HTTP_201_CREATED)
         return response.Response(status=status.HTTP_400_BAD_REQUEST)
-        
+    
+# Get Update Delete Exercise by id
 class DetailExerciseView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
     
@@ -247,19 +314,22 @@ class DetailExerciseView(generics.GenericAPIView):
         try:
             exercise = Exercise.objects.get(id=pk)
             exercise.delete()
-            return response.Response(status=status.HTTP_204_NO_CONTENT)
-        except Team.DoesNotExist:
+            return response.Response(status=status.HTTP_200_OK)
+        except Exercise.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
     
+# Get lists of exercise
 class ListExerciseView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
     
     def get(self, request, pk):
+        # Check is member of team
         try:
             members = Membership.objects.get(team=pk, user=request.user.id)
         except Membership.DoesNotExist:
             return response.Response(status=status.HTTP_403_FORBIDDEN)
         
+        # Get workbook of team
         workbooks = Workbook.objects.filter(team=pk)
         if not workbooks.exists():
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -267,6 +337,7 @@ class ListExerciseView(generics.GenericAPIView):
         for workbook in workbooks:
             # Check if submit exercise
             try:
+                print(request.user.id, pk, workbook.exercise.pk)
                 submission = Submission.objects.get(user=request.user.id, team=pk, exercise=workbook.exercise.pk)
                 print(submission.isDone)
                 isDone = True if submission.isDone == True else False 
@@ -291,6 +362,7 @@ class ListExerciseView(generics.GenericAPIView):
                          })
         return response.Response(data, status=status.HTTP_200_OK)
     
+# Get list of user that submit exercises filter by teamId and exerciseId
 class ListSubmissionView(generics.GenericAPIView):
     '''
     Which Team
@@ -300,6 +372,7 @@ class ListSubmissionView(generics.GenericAPIView):
     # permission_classes=(permissions.IsAuthenticated)
     
     def get(self, request, teamId, exerciseId):
+        # Get submission of team filtered by exerciseId and teamId
         submissions = Submission.objects.filter(exercise=exerciseId, team=teamId)
         if not submissions.exists():
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -333,14 +406,16 @@ class ListSubmissionView(generics.GenericAPIView):
         }
         return response.Response({'exericse': exercise_data,'data':data}, status=status.HTTP_200_OK)
 
+# Get list of exercise that submiss by student filter by teamId and userId
 class SubmissionView(generics.GenericAPIView):
     '''
     ดูว่าส่งอะไรไปแล้วบ้าง
     '''
+    # permission_classes = (permissions.IsAuthenticated, )
     
-    def get(self, request):
+    def get(self, request, teamId):
         try:
-            submissions = Submission.objects.filter(user=request.user.pk)
+            submissions = Submission.objects.filter(user=request.user.pk, team=teamId)
         except Submission.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
         data = []
@@ -358,9 +433,9 @@ class SubmissionView(generics.GenericAPIView):
             
         return response.Response(data, status=status.HTTP_200_OK)
  
- 
-#  ตรวจ
+#  Assessment Code Here 
 class FileSubmissionView(generics.GenericAPIView):
+    # permission_classes = (permissions.IsAuthenticated, )
     parser_classes = [MultiPartParser]
     # serializer_class = FileUploadSerializer
     
@@ -416,9 +491,48 @@ class FileSubmissionView(generics.GenericAPIView):
             
             return Response(data, status=status.HTTP_200_OK)
         else:
-            return Response(serializer.errors, status=400)
-        
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+# New Assessment
+class SubmitExerciseView(generics.GenericAPIView):
+    parser_classes = [MultiPartParser]
+
+    @swagger_auto_schema(
+        operation_id="upload_file",
+        operation_description="Upload a file",
+        manual_parameters=[openapi.Parameter(
+            name="file",
+            in_=openapi.IN_FORM,
+            type=openapi.TYPE_FILE,
+            description="Document"
+        )],
+    )
+    def post(self, request, pk, format=None):
+        serializer = FileUploadSerializer(data=request.data)
+
+        if serializer.is_valid():
+            uploaded_file = serializer.validated_data['file']
+            file_name = default_storage.save(uploaded_file.name, uploaded_file)
+
+            exercise = Exercise.objects.get(pk=pk)
+
+            with TemporaryDirectory() as temp_dir:
+                file_path = os.path.join(temp_dir, file_name)
+                default_storage.save(file_path, uploaded_file)
+
+                data = process_uploaded_file(temp_dir, exercise)
+
+                default_storage.delete(file_name)
+
+            if data:
+                return Response(data, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'configcode or unittest error'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class MultiFileUploadView(generics.GenericAPIView):
+    # permission_classes = (permissions.IsAuthenticated, )
     parser_classes = [MultiPartParser]
     # serializer_class = MultiFileUploadSerializer
     
@@ -450,7 +564,8 @@ class MultiFileUploadView(generics.GenericAPIView):
             return Response({'status': 'success'})
         else:
             return Response(file_serializer.errors, status=400)
-    
+
+# Create workbook  
 class CreateWorkbooksView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
     serializer_class = WorkbookSerializer
@@ -461,5 +576,50 @@ class CreateWorkbooksView(generics.GenericAPIView):
             serializer.save()
             return response.Response(serializer.data, status=status.HTTP_201_CREATED)
         return response.Response(status=status.HTTP_400_BAD_REQUEST)
+
+# Update Delete Get workbook by id
+class RetrieveUpdateDeleteWorkbookView(generics.GenericAPIView):
+    # permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = WorkbookSerializer
     
+    def get(self, request, pk):
+        try:
+            workbook = Workbook.objects.get(pk=pk)
+            serializer = WorkbookSerializer(workbook)
+            return response.Response(serializer.data, status=status.HTTP_200_OK)
+        except Workbook.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+    
+    def patch(self, request, pk):
+        try:
+            workbook = Workbook.objects.get(id=pk)
+            serializer = WorkbookSerializer(workbook, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return response.Response(serializer.data, status=status.HTTP_200_OK)
+            return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Workbook.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+    
+    def delete(self, request, pk):
+        try:
+            workbook = Workbook.objects.get(id=pk)
+            workbook.delete()
+            return response.Response(status=status.HTTP_200_OK)
+        except Workbook.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+
+# Create exercise and workbook
+class CreateExerciseAndWorkbook(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    
+    def post(self, request):
+        pass
+    
+# see score
+class RetrieveScoreView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    
+    def get(self, request):
+        pass
     
