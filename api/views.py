@@ -9,6 +9,7 @@ from .serializers import (TeamSerializer,
                           WorkbookSerializer,
                           MembershipSerializer,
                           InviteCodeSerializer,
+                          UserDataSerializer
                           )
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_flex_fields import is_expanded
@@ -143,18 +144,32 @@ class DetailTeamView(generics.GenericAPIView):
     def delete(self, request, pk):
         try:
             team = Team.objects.get(id=pk)
-            team.delete()
-            return response.Response(status=status.HTTP_204_NO_CONTENT)
+            membership = Membership.objects.get(user=request.user, team=team)
+
+            if membership.isStaff:
+                team.delete()
+                return response.Response(status=status.HTTP_204_NO_CONTENT)
+            else:
+                return response.Response({"detail": "You are not authorized to delete this team."}, status=status.HTTP_403_FORBIDDEN)
+
         except Team.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
+        except Membership.DoesNotExist:
+            return response.Response({"detail": "You are not a member of this team."}, status=status.HTTP_403_FORBIDDEN)
     
     def get(self, request, pk):
         try:
             team = Team.objects.get(id=pk)
+            membership = Membership.objects.get(user=request.user, team=team)
+
+            # User is a member of the team
             serializer = TeamSerializer(team)
             return response.Response(serializer.data, status=status.HTTP_200_OK)
+
         except Team.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
+        except Membership.DoesNotExist:
+            return response.Response({"detail": "You are not a member of this team."}, status=status.HTTP_403_FORBIDDEN)
     
     @swagger_auto_schema(
         responses={
@@ -167,13 +182,21 @@ class DetailTeamView(generics.GenericAPIView):
     def patch(self, request, pk):
         try:
             team = Team.objects.get(id=pk)
-            serializer = TeamSerializer(team, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return response.Response(serializer.data, status=status.HTTP_200_OK)
-            return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            membership = Membership.objects.get(user=request.user, team=team)
+
+            if membership.isStaff:
+                serializer = TeamSerializer(team, data=request.data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                    return response.Response(serializer.data, status=status.HTTP_200_OK)
+                return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return response.Response({"detail": "You are not authorized to update this team."}, status=status.HTTP_403_FORBIDDEN)
+
         except Team.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
+        except Membership.DoesNotExist:
+            return response.Response({"detail": "You are not a member of this team."}, status=status.HTTP_403_FORBIDDEN)
 
 # Get members of team list
 class TeamMemberView(generics.GenericAPIView):
@@ -181,24 +204,17 @@ class TeamMemberView(generics.GenericAPIView):
     
     def get(self, request, pk):
         try:
-            isMember = Membership.objects.get(team=pk, user=request.user.id)
+            is_member = Membership.objects.get(team=pk, user=request.user.id)
         except Membership.DoesNotExist:
-            return response.Response(status=status.HTTP_400_BAD_REQUEST)
-        try:
-            members = Membership.objects.filter(team=pk)
-        except Membership.DoesNotExist:
-            return response.Response(status=status.HTTP_404_NOT_FOUND)
-        members_data = []
-        for member in members:
-            user_data = {
-                'pk': member.pk,
-                'username': member.user.username,
-                'email': member.user.email,
-                'id': member.user.id,
-                'studentid': member.user.studentid,
-            }
-            members_data.append(user_data)
-        return response.Response({'members':members_data}, status=status.HTTP_200_OK)
+            return response.Response({"detail": "You are not a member of this team."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        members = Membership.objects.filter(team=pk)
+        
+        if members.exists():
+            serializer = UserDataSerializer([member.user for member in members], many=True)
+            return response.Response({'members': serializer.data}, status=status.HTTP_200_OK)
+        else:
+            return response.Response({"detail": "No members found for this team."}, status=status.HTTP_404_NOT_FOUND)
     
 # Add member by invite code
 class AddMemberWithInviteCodeView(generics.CreateAPIView):
@@ -301,11 +317,17 @@ class DetailExerciseView(generics.GenericAPIView):
     def patch(self, request, pk):
         try:
             exercise = Exercise.objects.get(id=pk)
-            serializer = ExerciseSerializer(exercise, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return response.Response(serializer.data, status=status.HTTP_200_OK)
-            return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if the request.user is the owner of the exercise
+            if exercise.owner == request.user:
+                serializer = ExerciseSerializer(exercise, data=request.data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                    return response.Response(serializer.data, status=status.HTTP_200_OK)
+                return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return response.Response({"detail": "You are not the owner of this exercise."}, status=status.HTTP_403_FORBIDDEN)
+
         except Exercise.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
             
@@ -313,8 +335,14 @@ class DetailExerciseView(generics.GenericAPIView):
     def delete(self, request, pk):
         try:
             exercise = Exercise.objects.get(id=pk)
-            exercise.delete()
-            return response.Response(status=status.HTTP_200_OK)
+
+            # Check if the request.user is the owner of the exercise
+            if exercise.owner == request.user:
+                exercise.delete()
+                return response.Response(status=status.HTTP_200_OK)
+            else:
+                return response.Response({"detail": "You are not the owner of this exercise."}, status=status.HTTP_403_FORBIDDEN)
+
         except Exercise.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
     
@@ -338,10 +366,14 @@ class ListExerciseView(generics.GenericAPIView):
             # Check if submit exercise
             try:
                 print(request.user.id, pk, workbook.exercise.pk)
-                submission = Submission.objects.get(user=request.user.id, team=pk, exercise=workbook.exercise.pk)
-                print(submission.isDone)
-                isDone = True if submission.isDone == True else False 
-            except Membership.DoesNotExist:
+                submission = Submission.objects.filter(user=request.user.id, team=pk, exercise=workbook.exercise.pk)
+                
+                if submission.exists():
+                    isDone = submission[0].isDone
+                else:
+                    isDone = False
+
+            except (Submission.DoesNotExist, IndexError):
                 isDone = False
             data.append({'dueTime': workbook.dueTime,
                          'openTime': workbook.openTime,
@@ -409,13 +441,13 @@ class ListSubmissionView(generics.GenericAPIView):
 # Get list of exercise that submiss by student filter by teamId and userId
 class SubmissionView(generics.GenericAPIView):
     '''
-    ดูว่าส่งอะไรไปแล้วบ้าง
+    ดูว่าส่ง exercises อะไรไปแล้วบ้าง user
     '''
     # permission_classes = (permissions.IsAuthenticated, )
     
-    def get(self, request, teamId):
+    def get(self, request, pk):
         try:
-            submissions = Submission.objects.filter(user=request.user.pk, team=teamId)
+            submissions = Submission.objects.filter(user=request.user.pk, team=pk)
         except Submission.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
         data = []
@@ -571,6 +603,13 @@ class CreateWorkbooksView(generics.GenericAPIView):
     serializer_class = WorkbookSerializer
     
     def post(self, request):
+        exercise_id = request.data.get("exercise")
+        team_id = request.data.get("team")
+        old_workbook = Workbook.objects.filter(exercise=exercise_id, team=team_id)
+
+        if old_workbook.exists():
+            return response.Response({'error': 'already exists'},status=status.HTTP_400_BAD_REQUEST)
+            
         serializer = WorkbookSerializer(data=request.data)
         if serializer.is_valid(raise_exception=True):
             serializer.save()

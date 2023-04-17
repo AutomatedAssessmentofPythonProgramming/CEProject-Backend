@@ -148,4 +148,7 @@ class ExerciseWorkbookSerializer(serializers.Serializer):
         instance.save()
         return instance
       
-      
+class UserDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['pk', 'username', 'email', 'id', 'studentid']     
