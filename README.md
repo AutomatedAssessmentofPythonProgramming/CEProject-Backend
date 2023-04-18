@@ -2,8 +2,8 @@
 
 ## install && Dependencies
 
-pip freeze > requirements.txt
-pip install requirements.txt
+        python -m venv env
+        pip install requirements.txt
 
 install grader-utils
 
