@@ -2,8 +2,8 @@
 
 ## install && Dependencies
 
-pip freeze > requirements.txt
-pip install requirements.txt
+        python venv env
+        pip install -r requirements.txt
 
 install grader-utils
 
@@ -34,6 +34,10 @@ create file .env or env.bat in window
 
         source .env // call env.bat in window
 
+        python manage.py makemigrations authentication
+        python manage.py makemigrations api
+        python manage.py showmigrations
+
 run migrate database
 
         python manage.py migrate
@@ -60,6 +64,9 @@ authentication/urls.py
 run again
 
         python manage.py migrate
+
+create superuser
+        python manage.py createsuperuser
         python manage.py runserver
 
 ## PATH

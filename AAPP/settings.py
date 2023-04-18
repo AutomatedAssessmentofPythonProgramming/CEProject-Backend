@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'authentication',
     'drf_yasg',
     'rest_framework_simplejwt.token_blacklist',
+    "corsheaders",
 ]
 
 SWAGGER_SETTINGS = {
@@ -49,11 +50,16 @@ SWAGGER_SETTINGS = {
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://nutapi.surawit.fish",
 ]
 
 ROOT_URLCONF = 'AAPP.urls'
