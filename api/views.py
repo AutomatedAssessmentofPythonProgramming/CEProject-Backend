@@ -9,7 +9,9 @@ from .serializers import (TeamSerializer,
                           WorkbookSerializer,
                           MembershipSerializer,
                           InviteCodeSerializer,
-                          UserDataSerializer
+                          UserDataSerializer,
+                          SubmissionSerializer,
+                          TeamCreationSerializer,
                           )
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_flex_fields import is_expanded
@@ -110,17 +112,22 @@ class CreateTeamView(generics.GenericAPIView):
             201: openapi.Response("Successfully created team"),
             400: openapi.Response("Invalid request"),
         },
-        request_body=TeamSerializer
+        request_body=TeamCreationSerializer
     )
     def post(self, request):
-        serializer = TeamSerializer(data=request.data)
+        serializer = TeamCreationSerializer(data=request.data)
         if serializer.is_valid(raise_exception=True):
             team = serializer.save()
             member_data = {"isStaff": True}
             member_serializer = MemberSerializer(data=member_data)
             member_serializer.is_valid(raise_exception=True)
             member = member_serializer.save(user=request.user, team=team)
-            return response.Response({'team': serializer.data, 
+            return response.Response({'team': {
+                                                "pk": team.pk,
+                                                "name": team.name,
+                                                "detail": team.detail,
+                                                "inviteCode": team.inviteCode
+                                                }, 
                                       'member': {'username':member.user.username,
                                                  'email':member.user.email,
                                                  'status':member_serializer.data
@@ -132,6 +139,8 @@ class CreateTeamView(generics.GenericAPIView):
 # Delete Update Get team by pk
 class DetailTeamView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = TeamMemberSerializer
+    queryset = Team.objects.all()
     
     @swagger_auto_schema(
         operation_description="Delete a team by ID",
@@ -164,6 +173,7 @@ class DetailTeamView(generics.GenericAPIView):
 
             # User is a member of the team
             serializer = TeamSerializer(team)
+            # print(team.inviteCode)
             return response.Response(serializer.data, status=status.HTTP_200_OK)
 
         except Team.DoesNotExist:
@@ -201,6 +211,8 @@ class DetailTeamView(generics.GenericAPIView):
 # Get members of team list
 class TeamMemberView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = MemberSerializer
+    queryset = Team.objects.all()
     
     def get(self, request, pk):
         try:
@@ -296,6 +308,8 @@ class ExerciseView(generics.GenericAPIView):
 # Get Update Delete Exercise by id
 class DetailExerciseView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = ExerciseSerializer
+    queryset = Exercise.objects.all()
     
     
     def get(self, request, pk):
@@ -349,6 +363,8 @@ class DetailExerciseView(generics.GenericAPIView):
 # Get lists of exercise
 class ListExerciseView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = MembershipSerializer
+    queryset = Exercise.objects.all()
     
     def get(self, request, pk):
         # Check is member of team
@@ -401,7 +417,8 @@ class ListSubmissionView(generics.GenericAPIView):
     Which exercise
     want User that submit exercise and get score
     '''
-    # permission_classes=(permissions.IsAuthenticated)
+    permission_classes=(permissions.IsAuthenticated)
+    serializer_class = SubmissionSerializer
     
     def get(self, request, teamId, exerciseId):
         # Get submission of team filtered by exerciseId and teamId
@@ -443,7 +460,9 @@ class SubmissionView(generics.GenericAPIView):
     '''
     ดูว่าส่ง exercises อะไรไปแล้วบ้าง user
     '''
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = SubmissionSerializer
+    queryset = Submission.objects.all()
     
     def get(self, request, pk):
         try:
@@ -466,10 +485,13 @@ class SubmissionView(generics.GenericAPIView):
         return response.Response(data, status=status.HTTP_200_OK)
  
 #  Assessment Code Here 
+# ต้องตั้งชื่อไฟล์เป็น model.py source code ---> model.py
+# unittest ต้องตรงกัน
 class FileSubmissionView(generics.GenericAPIView):
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
     parser_classes = [MultiPartParser]
-    # serializer_class = FileUploadSerializer
+    serializer_class = FileUploadSerializer
+    queryset = Exercise.objects.all()
     
     @swagger_auto_schema(
         operation_id="upload_file",
@@ -487,39 +509,70 @@ class FileSubmissionView(generics.GenericAPIView):
 
         if serializer.is_valid():
             # Save the uploaded file to the server
+            # uploaded_file = serializer.validated_data['file']
+            # file_name = uploaded_file.name
+            # file_name = default_storage.save(uploaded_file.name, uploaded_file)
+            # print("Uploaded file name:", file_name)
+            
             uploaded_file = serializer.validated_data['file']
             file_name = uploaded_file.name
-            file_name = default_storage.save(uploaded_file.name, uploaded_file)
+
+            # Change the file extension to .py
+            file_name_without_ext, file_ext = os.path.splitext(file_name)
+            if file_ext.lower() == '.txt':
+                file_name = file_name_without_ext + '.py'
+
+            file_name = default_storage.save(file_name, uploaded_file)
             print("Uploaded file name:", file_name)
             
             exercise = Exercise.objects.get(pk=pk)
-            filename = exercise.title
+            # filename = 'grader_tests'
+            
             code = exercise.source_code
             config = exercise.config_code
             unittest = exercise.unittest
             if config.strip() == '' or unittest.strip() == '':
                 return Response({'error': 'configcode or unittest error'}, status=status.HTTP_400_BAD_REQUEST)
             
-            with open(filename + '.py', 'w') as outfile:
+            with open('model' + '.py', 'w') as outfile:
                 outfile.write(code)
-            with open(filename + '.yaml', 'w') as outfile:
+            with open('test_config' + '.yaml', 'w') as outfile:
                 outfile.write(config)
-            with open(filename + '_tests.py', 'w') as outfile:
+            with open('grader_tests.py', 'w') as outfile:
                 outfile.write(unittest)
                 
             results = 'results.json'
                 
-            cmd = ['python3', '-m', 'graderutils.main', filename+'.yaml', '--develop-mode']
+            cmd = ['python3', '-m', 'graderutils.main', 'test_config.yaml', '--develop-mode']
             with open(results, 'w') as outfile:
                 subprocess.run(cmd, stdout=outfile)
             with open(results, 'r') as infile:
                 data = json.load(infile)
-                
-            os.remove(filename + '.py')
-            os.remove(filename + '.yaml')
-            os.remove(filename + '_tests.py')
-            os.remove(uploaded_file.name)
-            os.remove(results)
+            
+            try:
+                os.remove('model.py')
+            except FileNotFoundError:
+                print('model.py not found')
+
+            try:
+                os.remove('test_config.yaml')
+            except FileNotFoundError:
+                print('test_config.yaml not found')
+
+            try:
+                os.remove('grader_tests.py')
+            except FileNotFoundError:
+                print('grader_tests.py not found')
+
+            try:
+                os.remove(file_name)
+            except FileNotFoundError:
+                print(f'{file_name.name} not found')
+
+            try:
+                os.remove(results)
+            except FileNotFoundError:
+                print(f'{results} not found')
             
             return Response(data, status=status.HTTP_200_OK)
         else:
@@ -527,6 +580,7 @@ class FileSubmissionView(generics.GenericAPIView):
     
 # New Assessment
 class SubmitExerciseView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
     parser_classes = [MultiPartParser]
 
     @swagger_auto_schema(
@@ -564,7 +618,7 @@ class SubmitExerciseView(generics.GenericAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class MultiFileUploadView(generics.GenericAPIView):
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
     parser_classes = [MultiPartParser]
     # serializer_class = MultiFileUploadSerializer
     
@@ -618,8 +672,9 @@ class CreateWorkbooksView(generics.GenericAPIView):
 
 # Update Delete Get workbook by id
 class RetrieveUpdateDeleteWorkbookView(generics.GenericAPIView):
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
     serializer_class = WorkbookSerializer
+    queryset = Workbook.objects.all()
     
     def get(self, request, pk):
         try:
