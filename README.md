@@ -2,7 +2,7 @@
 
 ## install && Dependencies
 
-        python venv env
+        python -m venv env
         pip install -r requirements.txt
 
 install grader-utils
