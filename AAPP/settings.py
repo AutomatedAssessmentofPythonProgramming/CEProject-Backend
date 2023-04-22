@@ -69,8 +69,15 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
+# CORS_ORIGIN_ALLOW_ALL = True
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
+
 CSRF_TRUSTED_ORIGINS = [
     "https://nutapi.surawit.fish",
+    "http://localhost:3000",
 ]
 
 ROOT_URLCONF = 'AAPP.urls'

@@ -173,8 +173,10 @@ class DetailTeamView(generics.GenericAPIView):
 
             # User is a member of the team
             serializer = TeamSerializer(team)
+            serialized_data = serializer.data
+            serialized_data['is_staff'] = membership.isStaff
             # print(team.inviteCode)
-            return response.Response(serializer.data, status=status.HTTP_200_OK)
+            return response.Response(serialized_data, status=status.HTTP_200_OK)
 
         except Team.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
@@ -703,17 +705,37 @@ class RetrieveUpdateDeleteWorkbookView(generics.GenericAPIView):
         except Workbook.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
 
-# Create exercise and workbook
-class CreateExerciseAndWorkbook(generics.GenericAPIView):
-    permission_classes = (permissions.IsAuthenticated, )
     
-    def post(self, request):
-        pass
+class GetExerciseByIdView(generics.GenericAPIView):
+    # permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = ExerciseSerializer
+    
+    def get(self, request, exerciseId, teamId):
+        try:
+            exercise = Exercise.objects.get(pk=exerciseId)
+            workbook = Workbook.objects.get(exercise=exerciseId, team=teamId)
+            serializer = ExerciseSerializer(exercise)
+            
+            serialized_data = serializer.data
+            serialized_data['due'] = workbook.dueTime
+            return response.Response(serialized_data, status=status.HTTP_200_OK)
+        except Exercise.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+        except Workbook.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+
+
+# Create exercise and workbook
+# class CreateExerciseAndWorkbook(generics.GenericAPIView):
+#     permission_classes = (permissions.IsAuthenticated, )
+    
+#     def post(self, request):
+#         pass
     
 # see score
-class RetrieveScoreView(generics.GenericAPIView):
-    permission_classes = (permissions.IsAuthenticated, )
+# class RetrieveScoreView(generics.GenericAPIView):
+#     permission_classes = (permissions.IsAuthenticated, )
     
-    def get(self, request):
-        pass
+#     def get(self, request):
+#         pass
     

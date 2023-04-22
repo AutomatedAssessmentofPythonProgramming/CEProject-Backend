@@ -7,10 +7,12 @@ from .views import (RegisterView,
                     SetNewPasswordAPIView,
                     LogoutAPIView,
                     ProfileView,
+                    GetCSRFToken,
                     )
 from rest_framework_simplejwt.views import (TokenRefreshView, )
 
 urlpatterns = [
+    path('csrf_cookie', GetCSRFToken.as_view(), name='get-csrftoken'),
     path('register/', RegisterView.as_view(), name='register'),
     path('email-verify/', VerifyEmail.as_view(), name='email-verify'),
     path('login/', LoginAPIView.as_view(), name='login'),
