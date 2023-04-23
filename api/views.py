@@ -707,7 +707,7 @@ class RetrieveUpdateDeleteWorkbookView(generics.GenericAPIView):
 
     
 class GetExerciseByIdView(generics.GenericAPIView):
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
     serializer_class = ExerciseSerializer
     
     def get(self, request, exerciseId, teamId):
