@@ -241,6 +241,8 @@ class TeamMemberView(generics.GenericAPIView):
             member_data = UserDataSerializer(member.user).data
             member_data['count_submissions'] = count_submissions
             member_data['summary_score'] = summary_score
+            member_data['firstname'] = member.user.firstname
+            member_data['lastname'] = member.user.lastname
             members_data.append(member_data)
 
         return response.Response({'members': members_data}, status=status.HTTP_200_OK)
