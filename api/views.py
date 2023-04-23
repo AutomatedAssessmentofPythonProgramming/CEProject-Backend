@@ -32,6 +32,8 @@ import os
 import subprocess
 import json
 from tempfile import TemporaryDirectory
+from datetime import datetime, timezone
+import traceback
 
 from .utils import process_uploaded_file
 from datetime import datetime, timezone
@@ -535,6 +537,7 @@ class FileSubmissionView(generics.GenericAPIView):
         if serializer.is_valid():
             uploaded_file = serializer.validated_data['file']
             # print("Uploaded file:", uploaded_file)
+            # print("Uploaded file:", uploaded_file)
             file_name = uploaded_file.name
 
             # Change the file extension to .py
@@ -544,7 +547,10 @@ class FileSubmissionView(generics.GenericAPIView):
 
             file_name = default_storage.save(file_name, uploaded_file)
             # print("Uploaded file name:", file_name)
+            # print("Uploaded file name:", file_name)
             
+            exercise = Exercise.objects.get(pk=exerciseId)
+            # print("Fetched exercise:", exercise)
             exercise = Exercise.objects.get(pk=exerciseId)
             # print("Fetched exercise:", exercise)
             
@@ -569,8 +575,9 @@ class FileSubmissionView(generics.GenericAPIView):
             print(outfile)
             with open(results, 'r') as infile:
                 data = json.load(infile)
-            print(data)
+                print(data)
                 
+            # Submisssion
             # Submisssion
             try:
                 # try:
