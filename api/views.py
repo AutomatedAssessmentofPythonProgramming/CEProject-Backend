@@ -31,6 +31,8 @@ import os
 import subprocess
 import json
 from tempfile import TemporaryDirectory
+from datetime import datetime, timezone
+import traceback
 
 from .utils import process_uploaded_file
 
@@ -486,6 +488,17 @@ class SubmissionView(generics.GenericAPIView):
             
         return response.Response(data, status=status.HTTP_200_OK)
  
+# @staticmethod
+def cleanup_files(files):
+    for file in files:
+        # print(f"Deleting file: {file}")
+        try:
+            os.remove(file)
+            print(f"Deleted file: {file}")
+        except FileNotFoundError:
+            print(f'{file} not found')
+        except Exception as e:
+            print(f"Error while deleting {file}: {e}")
 #  Assessment Code Here 
 # ต้องตั้งชื่อไฟล์เป็น model.py source code ---> model.py
 # unittest ต้องตรงกัน
@@ -506,17 +519,12 @@ class FileSubmissionView(generics.GenericAPIView):
                             description="Document"
                             )],
     )
-    def post(self, request, pk, format=None):
+    def post(self, request, exerciseId, teamId, format=None):
         serializer = FileUploadSerializer(data=request.data)
 
         if serializer.is_valid():
-            # Save the uploaded file to the server
-            # uploaded_file = serializer.validated_data['file']
-            # file_name = uploaded_file.name
-            # file_name = default_storage.save(uploaded_file.name, uploaded_file)
-            # print("Uploaded file name:", file_name)
-            
             uploaded_file = serializer.validated_data['file']
+            # print("Uploaded file:", uploaded_file)
             file_name = uploaded_file.name
 
             # Change the file extension to .py
@@ -525,10 +533,10 @@ class FileSubmissionView(generics.GenericAPIView):
                 file_name = file_name_without_ext + '.py'
 
             file_name = default_storage.save(file_name, uploaded_file)
-            print("Uploaded file name:", file_name)
+            # print("Uploaded file name:", file_name)
             
-            exercise = Exercise.objects.get(pk=pk)
-            # filename = 'grader_tests'
+            exercise = Exercise.objects.get(pk=exerciseId)
+            # print("Fetched exercise:", exercise)
             
             code = exercise.source_code
             config = exercise.config_code
@@ -550,31 +558,60 @@ class FileSubmissionView(generics.GenericAPIView):
                 subprocess.run(cmd, stdout=outfile)
             with open(results, 'r') as infile:
                 data = json.load(infile)
+                
+            # Submisssion
+            try:
+                try:
+                    total_points = data['maxPoints']
+                    earned_points = data['points']
+                    # is_done = earned_points == total_points
+                    is_done = True
+                except Exception as e:
+                    print("Error while processing results:", e)
+                    return Response({'error': 'Error occurred while processing the results'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+                # Get or create a Submission instance
+                team = Team.objects.get(id=teamId)
+                user = request.user
+                # exercise = Exercise.objects.get(id=exerciseId)
+                
+                # Get the Workbook instance and check if the submission is late
+                workbook = Workbook.objects.get(exercise=exercise, team=team)
+                is_late = datetime.now(timezone.utc) > workbook.dueTime
+                
+                with open(file_name, 'r') as f:
+                    upload_code = f.read()
+
+                # Create and save a Submission instance
+                submission, created = Submission.objects.get_or_create(
+                    team=team,
+                    user=user,
+                    exercise=exercise,
+                    defaults={
+                        'isLate': is_late,  # Set this according to your requirements
+                        'isDone': is_done,
+                        'code': upload_code,
+                        'score': earned_points,
+                    }
+                )
+                
+                
+                # If submission already exists, update it
+                if not created:
+                    submission.isLate = is_late  # Update this according to your requirements
+                    submission.isDone = is_done
+                    submission.code = upload_code
+                    submission.score = earned_points
+                    submission.save()
+                    
+            except Exception as e:
+                print("Error while processing submission:")
+                print(traceback.format_exc())
+                print(e)
+                return Response({'error': 'Error occurred while processing the submission'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            try:
-                os.remove('model.py')
-            except FileNotFoundError:
-                print('model.py not found')
-
-            try:
-                os.remove('test_config.yaml')
-            except FileNotFoundError:
-                print('test_config.yaml not found')
-
-            try:
-                os.remove('grader_tests.py')
-            except FileNotFoundError:
-                print('grader_tests.py not found')
-
-            try:
-                os.remove(file_name)
-            except FileNotFoundError:
-                print(f'{file_name.name} not found')
-
-            try:
-                os.remove(results)
-            except FileNotFoundError:
-                print(f'{results} not found')
+            finally:
+                cleanup_files(['model.py', 'test_config.yaml', 'grader_tests.py', file_name, results])
             
             return Response(data, status=status.HTTP_200_OK)
         else:
