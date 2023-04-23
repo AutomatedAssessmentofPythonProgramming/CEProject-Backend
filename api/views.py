@@ -12,6 +12,7 @@ from .serializers import (TeamSerializer,
                           UserDataSerializer,
                           SubmissionSerializer,
                           TeamCreationSerializer,
+                          UserSubmissionRequestSerializer,
                           )
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_flex_fields import is_expanded
@@ -400,7 +401,7 @@ class ListExerciseView(generics.GenericAPIView):
         for workbook in workbooks:
             # Check if submit exercise
             try:
-                print(request.user.id, pk, workbook.exercise.pk)
+                # print(request.user.id, pk, workbook.exercise.pk)
                 submission = Submission.objects.filter(user=request.user.id, team=pk, exercise=workbook.exercise.pk)
                 
                 if submission.exists():
@@ -436,7 +437,7 @@ class ListSubmissionView(generics.GenericAPIView):
     Which exercise
     want User that submit exercise and get score
     '''
-    permission_classes=(permissions.IsAuthenticated)
+    permission_classes=(permissions.IsAuthenticated, )
     serializer_class = SubmissionSerializer
     
     def get(self, request, teamId, exerciseId):
@@ -784,6 +785,60 @@ class GetExerciseByIdView(generics.GenericAPIView):
             return response.Response(status=status.HTTP_404_NOT_FOUND)
         except Workbook.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
+
+
+# Staff Member Exercises
+class UserSubmissionsView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = UserSubmissionRequestSerializer
+    response_serializer_class = SubmissionSerializer
+
+    def post(self, request):
+        request_serializer = self.serializer_class(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+        team_id = request_serializer.validated_data['team_id']
+        user_id = request_serializer.validated_data['user_id']
+        # Check if user is a team staff member
+        try:
+            membership = Membership.objects.get(team=team_id, user=request.user.id, isStaff=True)
+        except Membership.DoesNotExist:
+            return response.Response({"detail": "You are not a staff member of this team."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get user's submissions for the team
+        submissions = Submission.objects.filter(team=team_id, user=user_id)
+
+        if not submissions.exists():
+            return response.Response({"detail": "No submissions found for this user."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Serialize the submissions data and return as response
+        serialized_submissions = self.response_serializer_class(submissions, many=True)
+        return response.Response({'submissions': serialized_submissions.data}, status=status.HTTP_200_OK)
+
+# Updated Workbook
+class UpdateTeamWorkbookView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = WorkbookSerializer
+
+    def patch(self, request, team_id, exercise_id):
+        try:
+            # Check if the user is a team staff member
+            membership = Membership.objects.get(team=team_id, user=request.user.id, isStaff=True)
+        except Membership.DoesNotExist:
+            return response.Response({"detail": "You are not a staff member of this team."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get the workbook object
+        try:
+            workbook = Workbook.objects.get(team=team_id, exercise=exercise_id)
+        except Workbook.DoesNotExist:
+            return response.Response({"detail": "The specified workbook does not exist."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Validate and update the workbook data
+        serializer = self.serializer_class(workbook, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # Return the updated workbook data
+        return response.Response(serializer.data, status=status.HTTP_200_OK)
 
 
 # Create exercise and workbook
