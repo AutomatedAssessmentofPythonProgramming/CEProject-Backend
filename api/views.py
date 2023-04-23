@@ -23,6 +23,7 @@ from rest_framework.parsers import FileUploadParser, MultiPartParser
 from rest_framework.response import Response
 
 from django.core.files.storage import default_storage
+from django.db import models
 
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -35,6 +36,8 @@ from datetime import datetime, timezone
 import traceback
 
 from .utils import process_uploaded_file
+from datetime import datetime, timezone
+import traceback
 
 class TeamViewSet(FlexFieldsMixin, ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -226,11 +229,21 @@ class TeamMemberView(generics.GenericAPIView):
         
         members = Membership.objects.filter(team=pk)
         
-        if members.exists():
-            serializer = UserDataSerializer([member.user for member in members], many=True)
-            return response.Response({'members': serializer.data}, status=status.HTTP_200_OK)
-        else:
+        if not members.exists():
             return response.Response({"detail": "No members found for this team."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get submissions for each member and calculate summary score and count
+        members_data = []
+        for member in members:
+            submissions = Submission.objects.filter(team=pk, user=member.user)
+            count_submissions = submissions.count()
+            summary_score = submissions.aggregate(models.Sum('score'))['score__sum'] or 0
+            member_data = UserDataSerializer(member.user).data
+            member_data['count_submissions'] = count_submissions
+            member_data['summary_score'] = summary_score
+            members_data.append(member_data)
+
+        return response.Response({'members': members_data}, status=status.HTTP_200_OK)
     
 # Add member by invite code
 class AddMemberWithInviteCodeView(generics.CreateAPIView):
@@ -488,17 +501,16 @@ class SubmissionView(generics.GenericAPIView):
             
         return response.Response(data, status=status.HTTP_200_OK)
  
-# @staticmethod
+
 def cleanup_files(files):
+    # print("Enter clean up files")
     for file in files:
-        # print(f"Deleting file: {file}")
+        # print(f"Deleting file: {file}")  # Add this line
         try:
             os.remove(file)
-            print(f"Deleted file: {file}")
+            print(f"Deleted file: {file}")  # Add this line
         except FileNotFoundError:
             print(f'{file} not found')
-        except Exception as e:
-            print(f"Error while deleting {file}: {e}")
 #  Assessment Code Here 
 # ต้องตั้งชื่อไฟล์เป็น model.py source code ---> model.py
 # unittest ต้องตรงกัน
@@ -525,6 +537,7 @@ class FileSubmissionView(generics.GenericAPIView):
         if serializer.is_valid():
             uploaded_file = serializer.validated_data['file']
             # print("Uploaded file:", uploaded_file)
+            # print("Uploaded file:", uploaded_file)
             file_name = uploaded_file.name
 
             # Change the file extension to .py
@@ -534,7 +547,10 @@ class FileSubmissionView(generics.GenericAPIView):
 
             file_name = default_storage.save(file_name, uploaded_file)
             # print("Uploaded file name:", file_name)
+            # print("Uploaded file name:", file_name)
             
+            exercise = Exercise.objects.get(pk=exerciseId)
+            # print("Fetched exercise:", exercise)
             exercise = Exercise.objects.get(pk=exerciseId)
             # print("Fetched exercise:", exercise)
             
@@ -556,19 +572,22 @@ class FileSubmissionView(generics.GenericAPIView):
             cmd = ['python3', '-m', 'graderutils.main', 'test_config.yaml', '--develop-mode']
             with open(results, 'w') as outfile:
                 subprocess.run(cmd, stdout=outfile)
+            print(outfile)
             with open(results, 'r') as infile:
                 data = json.load(infile)
+                print(data)
                 
             # Submisssion
+            # Submisssion
             try:
-                try:
-                    total_points = data['maxPoints']
-                    earned_points = data['points']
-                    # is_done = earned_points == total_points
-                    is_done = True
-                except Exception as e:
-                    print("Error while processing results:", e)
-                    return Response({'error': 'Error occurred while processing the results'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                # try:
+                total_points = data['maxPoints']
+                earned_points = data['points']
+                # is_done = earned_points == total_points
+                is_done = True
+                # except Exception as e:
+                #     print("Error while processing results:", e)
+                #     return Response({'error': 'Error occurred while processing the results'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
                 # Get or create a Submission instance
                 team = Team.objects.get(id=teamId)
@@ -577,7 +596,10 @@ class FileSubmissionView(generics.GenericAPIView):
                 
                 # Get the Workbook instance and check if the submission is late
                 workbook = Workbook.objects.get(exercise=exercise, team=team)
-                is_late = datetime.now(timezone.utc) > workbook.dueTime
+                if workbook.dueTime == None:
+                    is_late = True
+                else:
+                    is_late = datetime.now(timezone.utc) > workbook.dueTime
                 
                 with open(file_name, 'r') as f:
                     upload_code = f.read()
@@ -608,12 +630,12 @@ class FileSubmissionView(generics.GenericAPIView):
                 print("Error while processing submission:")
                 print(traceback.format_exc())
                 print(e)
-                return Response({'error': 'Error occurred while processing the submission'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"data": data, 'error': 'submission'}, status=status.HTTP_200_OK)
             
             finally:
                 cleanup_files(['model.py', 'test_config.yaml', 'grader_tests.py', file_name, results])
             
-            return Response(data, status=status.HTTP_200_OK)
+            return Response({"data": data, 'error': ''}, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
