@@ -41,15 +41,18 @@ class GetCSRFToken(APIView):
         return Response({ 'seccess': 'CSRF cookie set'})
 
 class RegisterView(generics.GenericAPIView):
-
+    permission_classes = (permissions.AllowAny, )
     serializer_class = RegisterSerializer
-    # renderer_classes = (UserRenderer, )
 
     def post(self, request):
         user = request.data
         serializer=self.serializer_class(data=user)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        try:
+            serializer.save()
+        except Exception as e:
+            print("Error while saving:", e)
+            return Response({'error': 'Error occurred while saving'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         user_data = serializer.data
         user=User.objects.get(email=user_data['email'])
