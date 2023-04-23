@@ -14,7 +14,8 @@ from .views import ( TeamViewSet,
                      MultiFileUploadView,
                      CreateWorkbooksView,
                      RetrieveUpdateDeleteWorkbookView,
-                     AddMemberWithInviteCodeView
+                     AddMemberWithInviteCodeView,
+                     GetExerciseByIdView
                     )
 
 urlpatterns = [
@@ -26,10 +27,12 @@ urlpatterns = [
     path('exercise/', ExerciseView.as_view(), name='exercise-create'),
     path('exercise/<int:pk>', DetailExerciseView.as_view(), name='exercise-detail'),
     path('submissions-list/<int:pk>', SubmissionView.as_view(), name='submission-list'),
-    path('exercise/<int:pk>/submit', FileSubmissionView.as_view(), name='upload-file'),
+    path('exercise-submit/<int:exerciseId>/<int:teamId>', FileSubmissionView.as_view(), name='upload-file'),
     # path('multi-upload-file/', MultiFileUploadView.as_view(), name='multi-upload-file'),
     path('workbook/', CreateWorkbooksView.as_view(), name='create-workbook'),
     path('workbook/<int:pk>', RetrieveUpdateDeleteWorkbookView.as_view(), name='workbook-detail'),
     path('add-member/', AddMemberWithInviteCodeView.as_view(), name='add-member'),
     path('submission/<int:exerciseId>/team/<int:teamId>', ListSubmissionView.as_view(), name='manage-submission'),
+    
+    path('exercise/<int:exerciseId>/<int:teamId>', GetExerciseByIdView.as_view(), name='get-exercisebyid'),
 ]

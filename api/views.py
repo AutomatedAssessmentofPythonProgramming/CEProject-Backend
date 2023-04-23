@@ -9,7 +9,9 @@ from .serializers import (TeamSerializer,
                           WorkbookSerializer,
                           MembershipSerializer,
                           InviteCodeSerializer,
-                          UserDataSerializer
+                          UserDataSerializer,
+                          SubmissionSerializer,
+                          TeamCreationSerializer,
                           )
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_flex_fields import is_expanded
@@ -29,6 +31,8 @@ import os
 import subprocess
 import json
 from tempfile import TemporaryDirectory
+from datetime import datetime, timezone
+import traceback
 
 from .utils import process_uploaded_file
 
@@ -110,17 +114,22 @@ class CreateTeamView(generics.GenericAPIView):
             201: openapi.Response("Successfully created team"),
             400: openapi.Response("Invalid request"),
         },
-        request_body=TeamSerializer
+        request_body=TeamCreationSerializer
     )
     def post(self, request):
-        serializer = TeamSerializer(data=request.data)
+        serializer = TeamCreationSerializer(data=request.data)
         if serializer.is_valid(raise_exception=True):
             team = serializer.save()
             member_data = {"isStaff": True}
             member_serializer = MemberSerializer(data=member_data)
             member_serializer.is_valid(raise_exception=True)
             member = member_serializer.save(user=request.user, team=team)
-            return response.Response({'team': serializer.data, 
+            return response.Response({'team': {
+                                                "pk": team.pk,
+                                                "name": team.name,
+                                                "detail": team.detail,
+                                                "inviteCode": team.inviteCode
+                                                }, 
                                       'member': {'username':member.user.username,
                                                  'email':member.user.email,
                                                  'status':member_serializer.data
@@ -132,6 +141,8 @@ class CreateTeamView(generics.GenericAPIView):
 # Delete Update Get team by pk
 class DetailTeamView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = TeamMemberSerializer
+    queryset = Team.objects.all()
     
     @swagger_auto_schema(
         operation_description="Delete a team by ID",
@@ -164,7 +175,10 @@ class DetailTeamView(generics.GenericAPIView):
 
             # User is a member of the team
             serializer = TeamSerializer(team)
-            return response.Response(serializer.data, status=status.HTTP_200_OK)
+            serialized_data = serializer.data
+            serialized_data['is_staff'] = membership.isStaff
+            # print(team.inviteCode)
+            return response.Response(serialized_data, status=status.HTTP_200_OK)
 
         except Team.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
@@ -201,6 +215,8 @@ class DetailTeamView(generics.GenericAPIView):
 # Get members of team list
 class TeamMemberView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = MemberSerializer
+    queryset = Team.objects.all()
     
     def get(self, request, pk):
         try:
@@ -296,6 +312,8 @@ class ExerciseView(generics.GenericAPIView):
 # Get Update Delete Exercise by id
 class DetailExerciseView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = ExerciseSerializer
+    queryset = Exercise.objects.all()
     
     
     def get(self, request, pk):
@@ -349,6 +367,8 @@ class DetailExerciseView(generics.GenericAPIView):
 # Get lists of exercise
 class ListExerciseView(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = MembershipSerializer
+    queryset = Exercise.objects.all()
     
     def get(self, request, pk):
         # Check is member of team
@@ -401,7 +421,8 @@ class ListSubmissionView(generics.GenericAPIView):
     Which exercise
     want User that submit exercise and get score
     '''
-    # permission_classes=(permissions.IsAuthenticated)
+    permission_classes=(permissions.IsAuthenticated)
+    serializer_class = SubmissionSerializer
     
     def get(self, request, teamId, exerciseId):
         # Get submission of team filtered by exerciseId and teamId
@@ -443,7 +464,9 @@ class SubmissionView(generics.GenericAPIView):
     '''
     ดูว่าส่ง exercises อะไรไปแล้วบ้าง user
     '''
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = SubmissionSerializer
+    queryset = Submission.objects.all()
     
     def get(self, request, pk):
         try:
@@ -465,11 +488,25 @@ class SubmissionView(generics.GenericAPIView):
             
         return response.Response(data, status=status.HTTP_200_OK)
  
+# @staticmethod
+def cleanup_files(files):
+    for file in files:
+        # print(f"Deleting file: {file}")
+        try:
+            os.remove(file)
+            print(f"Deleted file: {file}")
+        except FileNotFoundError:
+            print(f'{file} not found')
+        except Exception as e:
+            print(f"Error while deleting {file}: {e}")
 #  Assessment Code Here 
+# ต้องตั้งชื่อไฟล์เป็น model.py source code ---> model.py
+# unittest ต้องตรงกัน
 class FileSubmissionView(generics.GenericAPIView):
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
     parser_classes = [MultiPartParser]
-    # serializer_class = FileUploadSerializer
+    serializer_class = FileUploadSerializer
+    queryset = Exercise.objects.all()
     
     @swagger_auto_schema(
         operation_id="upload_file",
@@ -482,44 +519,99 @@ class FileSubmissionView(generics.GenericAPIView):
                             description="Document"
                             )],
     )
-    def post(self, request, pk, format=None):
+    def post(self, request, exerciseId, teamId, format=None):
         serializer = FileUploadSerializer(data=request.data)
 
         if serializer.is_valid():
-            # Save the uploaded file to the server
             uploaded_file = serializer.validated_data['file']
+            # print("Uploaded file:", uploaded_file)
             file_name = uploaded_file.name
-            file_name = default_storage.save(uploaded_file.name, uploaded_file)
-            print("Uploaded file name:", file_name)
+
+            # Change the file extension to .py
+            file_name_without_ext, file_ext = os.path.splitext(file_name)
+            if file_ext.lower() == '.txt':
+                file_name = file_name_without_ext + '.py'
+
+            file_name = default_storage.save(file_name, uploaded_file)
+            # print("Uploaded file name:", file_name)
             
-            exercise = Exercise.objects.get(pk=pk)
-            filename = exercise.title
+            exercise = Exercise.objects.get(pk=exerciseId)
+            # print("Fetched exercise:", exercise)
+            
             code = exercise.source_code
             config = exercise.config_code
             unittest = exercise.unittest
             if config.strip() == '' or unittest.strip() == '':
                 return Response({'error': 'configcode or unittest error'}, status=status.HTTP_400_BAD_REQUEST)
             
-            with open(filename + '.py', 'w') as outfile:
+            with open('model' + '.py', 'w') as outfile:
                 outfile.write(code)
-            with open(filename + '.yaml', 'w') as outfile:
+            with open('test_config' + '.yaml', 'w') as outfile:
                 outfile.write(config)
-            with open(filename + '_tests.py', 'w') as outfile:
+            with open('grader_tests.py', 'w') as outfile:
                 outfile.write(unittest)
                 
             results = 'results.json'
                 
-            cmd = ['python3', '-m', 'graderutils.main', filename+'.yaml', '--develop-mode']
+            cmd = ['python3', '-m', 'graderutils.main', 'test_config.yaml', '--develop-mode']
             with open(results, 'w') as outfile:
                 subprocess.run(cmd, stdout=outfile)
             with open(results, 'r') as infile:
                 data = json.load(infile)
                 
-            os.remove(filename + '.py')
-            os.remove(filename + '.yaml')
-            os.remove(filename + '_tests.py')
-            os.remove(uploaded_file.name)
-            os.remove(results)
+            # Submisssion
+            try:
+                try:
+                    total_points = data['maxPoints']
+                    earned_points = data['points']
+                    # is_done = earned_points == total_points
+                    is_done = True
+                except Exception as e:
+                    print("Error while processing results:", e)
+                    return Response({'error': 'Error occurred while processing the results'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+                # Get or create a Submission instance
+                team = Team.objects.get(id=teamId)
+                user = request.user
+                # exercise = Exercise.objects.get(id=exerciseId)
+                
+                # Get the Workbook instance and check if the submission is late
+                workbook = Workbook.objects.get(exercise=exercise, team=team)
+                is_late = datetime.now(timezone.utc) > workbook.dueTime
+                
+                with open(file_name, 'r') as f:
+                    upload_code = f.read()
+
+                # Create and save a Submission instance
+                submission, created = Submission.objects.get_or_create(
+                    team=team,
+                    user=user,
+                    exercise=exercise,
+                    defaults={
+                        'isLate': is_late,  # Set this according to your requirements
+                        'isDone': is_done,
+                        'code': upload_code,
+                        'score': earned_points,
+                    }
+                )
+                
+                
+                # If submission already exists, update it
+                if not created:
+                    submission.isLate = is_late  # Update this according to your requirements
+                    submission.isDone = is_done
+                    submission.code = upload_code
+                    submission.score = earned_points
+                    submission.save()
+                    
+            except Exception as e:
+                print("Error while processing submission:")
+                print(traceback.format_exc())
+                print(e)
+                return Response({'error': 'Error occurred while processing the submission'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            finally:
+                cleanup_files(['model.py', 'test_config.yaml', 'grader_tests.py', file_name, results])
             
             return Response(data, status=status.HTTP_200_OK)
         else:
@@ -527,6 +619,7 @@ class FileSubmissionView(generics.GenericAPIView):
     
 # New Assessment
 class SubmitExerciseView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
     parser_classes = [MultiPartParser]
 
     @swagger_auto_schema(
@@ -564,7 +657,7 @@ class SubmitExerciseView(generics.GenericAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class MultiFileUploadView(generics.GenericAPIView):
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
     parser_classes = [MultiPartParser]
     # serializer_class = MultiFileUploadSerializer
     
@@ -618,8 +711,9 @@ class CreateWorkbooksView(generics.GenericAPIView):
 
 # Update Delete Get workbook by id
 class RetrieveUpdateDeleteWorkbookView(generics.GenericAPIView):
-    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated, )
     serializer_class = WorkbookSerializer
+    queryset = Workbook.objects.all()
     
     def get(self, request, pk):
         try:
@@ -648,17 +742,37 @@ class RetrieveUpdateDeleteWorkbookView(generics.GenericAPIView):
         except Workbook.DoesNotExist:
             return response.Response(status=status.HTTP_404_NOT_FOUND)
 
-# Create exercise and workbook
-class CreateExerciseAndWorkbook(generics.GenericAPIView):
-    permission_classes = (permissions.IsAuthenticated, )
     
-    def post(self, request):
-        pass
+class GetExerciseByIdView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated, )
+    serializer_class = ExerciseSerializer
+    
+    def get(self, request, exerciseId, teamId):
+        try:
+            exercise = Exercise.objects.get(pk=exerciseId)
+            workbook = Workbook.objects.get(exercise=exerciseId, team=teamId)
+            serializer = ExerciseSerializer(exercise)
+            
+            serialized_data = serializer.data
+            serialized_data['due'] = workbook.dueTime
+            return response.Response(serialized_data, status=status.HTTP_200_OK)
+        except Exercise.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+        except Workbook.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+
+
+# Create exercise and workbook
+# class CreateExerciseAndWorkbook(generics.GenericAPIView):
+#     permission_classes = (permissions.IsAuthenticated, )
+    
+#     def post(self, request):
+#         pass
     
 # see score
-class RetrieveScoreView(generics.GenericAPIView):
-    permission_classes = (permissions.IsAuthenticated, )
+# class RetrieveScoreView(generics.GenericAPIView):
+#     permission_classes = (permissions.IsAuthenticated, )
     
-    def get(self, request):
-        pass
+#     def get(self, request):
+#         pass
     

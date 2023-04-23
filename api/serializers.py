@@ -13,10 +13,31 @@ class UserSerializer(FlexFieldsModelSerializer):
           'submissions' : ('api.SubmissionSerializer', {'many': True}),
         }
 
-class TeamSerializer(FlexFieldsModelSerializer):
+class TeamCreationSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = Team 
         fields = ['pk', 'name', 'detail']
+        
+    def create(self, validated_data):
+        # Generate a unique invite code
+        invite_code = str(uuid.uuid4())[:8]
+
+        # Check if the generated invite code already exists
+        while Team.objects.filter(inviteCode=invite_code).exists():
+            invite_code = str(uuid.uuid4())[:8]
+
+        # Assign the unique invite code
+        validated_data['inviteCode'] = invite_code
+
+        # Create the team instance
+        team = Team.objects.create(**validated_data)
+
+        return team
+
+class TeamSerializer(FlexFieldsModelSerializer):
+    class Meta:
+        model = Team 
+        fields = ['pk', 'name', 'detail', 'inviteCode']
         expandable_fields = {
           'users': ('api.UserSerializer', {'many': True}),
           'members': ('api.MemberSerializer', {'many': True}),
@@ -151,4 +172,9 @@ class ExerciseWorkbookSerializer(serializers.Serializer):
 class UserDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['pk', 'username', 'email', 'id', 'studentid']     
+        fields = ['pk', 'username', 'email', 'studentid']    
+        
+class SubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Submission
+        fields = []

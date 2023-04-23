@@ -28,6 +28,18 @@ import jwt
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
+from rest_framework.views import APIView
+
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
+from django.utils.decorators import method_decorator
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class GetCSRFToken(APIView):
+    permission_classes = (permissions.AllowAny, )
+    
+    def get(self, request, format=None):
+        return Response({ 'seccess': 'CSRF cookie set'})
+
 class RegisterView(generics.GenericAPIView):
 
     serializer_class = RegisterSerializer
