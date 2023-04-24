@@ -177,13 +177,15 @@ class UserDataSerializer(serializers.ModelSerializer):
 class SubmissionSerializer(serializers.ModelSerializer):
     exercise_title = serializers.CharField(source='exercise.title')
     exercise_id = serializers.IntegerField(source='exercise.id')
+    exercise_instruction = serializers.CharField(source='exercise.instruction')
+    user_id = serializers.IntegerField(source='user.id')
     user_username = serializers.CharField(source='user.username')
     user_firstname = serializers.CharField(source='user.firstname')
     user_lastname = serializers.CharField(source='user.lastname')
 
     class Meta:
         model = Submission
-        fields = ['id', 'exercise_title', 'exercise_id', 'user_username', 'user_firstname', 'user_lastname', 'dateSubmit', 'isLate', 'isDone', 'score', 'code']
+        fields = ['id', 'exercise_title', 'exercise_id', 'exercise_instruction', 'user_id', 'user_username', 'user_firstname', 'user_lastname', 'dateSubmit', 'isLate', 'isDone', 'score', 'code']
         
 class UserSubmissionRequestSerializer(serializers.Serializer):
     team_id = serializers.IntegerField()
