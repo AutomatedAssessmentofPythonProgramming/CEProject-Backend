@@ -70,6 +70,7 @@ create static files
         python manage.py collectstatic
 
 create superuser
+
         python manage.py createsuperuser
         python manage.py runserver
 
