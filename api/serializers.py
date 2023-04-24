@@ -174,22 +174,23 @@ class ExerciseWorkbookSerializer(serializers.Serializer):
 class UserDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['pk', 'username', 'email', 'studentid']    
+        fields = ['pk', 'username', 'email', 'studentid', 'firstname', 'lastname']    
         
 class SubmissionSerializer(serializers.ModelSerializer):
-    exercise_title = serializers.CharField(source='exercise.title')
-    exercise_id = serializers.IntegerField(source='exercise.id')
-    exercise_instruction = serializers.CharField(source='exercise.instruction')
-    exercise_code_name = serializers.CharField(source='exercise.code_name')
-    exercise_example_code = serializers.CharField(source='exercise.example_code')
-    user_id = serializers.IntegerField(source='user.id')
-    user_username = serializers.CharField(source='user.username')
-    user_firstname = serializers.CharField(source='user.firstname')
-    user_lastname = serializers.CharField(source='user.lastname')
+    # exercise_title = serializers.CharField(source='exercise.title')
+    # exercise_id = serializers.IntegerField(source='exercise.id')
+    # exercise_instruction = serializers.CharField(source='exercise.instruction')
+    # exercise_code_name = serializers.CharField(source='exercise.code_name')
+    # exercise_example_code = serializers.CharField(source='exercise.example_code')
+    # user_id = serializers.IntegerField(source='user.id')
+    # user_username = serializers.CharField(source='user.username')
+    # user_firstname = serializers.CharField(source='user.firstname')
+    # user_lastname = serializers.CharField(source='user.lastname')
 
     class Meta:
         model = Submission
-        fields = ['id', 'exercise_title', 'exercise_id', 'exercise_instruction', 'exercise_code_name', 'exercise_example_code', 'user_id', 'user_username', 'user_firstname', 'user_lastname', 'dateSubmit', 'isLate', 'isDone', 'score', 'code']
+        # fields = ['id', 'exercise_title', 'exercise_id', 'exercise_instruction', 'exercise_code_name', 'exercise_example_code', 'user_id', 'user_username', 'user_firstname', 'user_lastname', 'dateSubmit', 'isLate', 'isDone', 'score', 'code']
+        fields = ['id', 'exercise', 'user', 'dateSubmit', 'isLate', 'isDone', 'score', 'code']
         
 class UserSubmissionRequestSerializer(serializers.Serializer):
     team_id = serializers.IntegerField()

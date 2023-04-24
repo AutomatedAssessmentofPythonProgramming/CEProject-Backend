@@ -811,10 +811,18 @@ class UserSubmissionsView(generics.GenericAPIView):
 
         if not submissions.exists():
             return response.Response({"detail": "No submissions found for this user."}, status=status.HTTP_404_NOT_FOUND)
+        
+        try: 
+            user = User.objects.get(id=user_id)
+            user_data = UserDataSerializer(user)
+        except User.DoesNotExist:
+            return response.Response({"detail": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(e)
 
         # Serialize the submissions data and return as response
         serialized_submissions = self.response_serializer_class(submissions, many=True)
-        return response.Response({'submissions': serialized_submissions.data}, status=status.HTTP_200_OK)
+        return response.Response({'submissions': serialized_submissions.data, 'user': user_data.data}, status=status.HTTP_200_OK)
 
 # Updated Workbook
 class UpdateTeamWorkbookView(generics.GenericAPIView):
