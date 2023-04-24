@@ -452,6 +452,7 @@ class ListSubmissionView(generics.GenericAPIView):
             data.append(
                 {
                     'user': {
+                        'pk': user.pk,
                         'firstname': user.firstname,
                         'lastname': user.lastname,
                         'username': user.username,
@@ -460,6 +461,7 @@ class ListSubmissionView(generics.GenericAPIView):
                     },
                     'dateSubmit': submission.dateSubmit,
                     'score': submission.score,
+                    'code': submission.code
                 }
             )
         exercise = submissions[0].exercise
@@ -478,7 +480,8 @@ class ListSubmissionView(generics.GenericAPIView):
 # Get list of exercise that submiss by student filter by teamId and userId
 class SubmissionView(generics.GenericAPIView):
     '''
-    ดูว่าส่ง exercises อะไรไปแล้วบ้าง user
+    ดูว่าส่ง exercises อะไรไปแล้วบ้าง user 
+    id = teamId
     '''
     permission_classes = (permissions.IsAuthenticated, )
     serializer_class = SubmissionSerializer
@@ -496,9 +499,11 @@ class SubmissionView(generics.GenericAPIView):
                 {
                     'exercise': {
                             'title': exercise.title,
+                            'instruction': exercise.instruction,
                         },
                     'submitDate': submission.dateSubmit,
                     'score': submission.score,
+                    'code': submission.code
                 }
             )
             
@@ -838,6 +843,30 @@ class UpdateTeamWorkbookView(generics.GenericAPIView):
         serializer.save()
 
         # Return the updated workbook data
+        return response.Response(serializer.data, status=status.HTTP_200_OK)
+    
+class ExerciseUserSubmissionsView(generics.ListAPIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    serializer_class = SubmissionSerializer
+
+    def get_queryset(self):
+        exercise_id = self.kwargs.get('exercise_id')
+        user_id = self.kwargs.get('user_id')
+        team_id = self.kwargs.get('team_id')
+        return Submission.objects.filter(exercise_id=exercise_id, user_id=user_id, team_id=team_id)
+
+    def list(self, request, *args, **kwargs):
+        try:
+            # Check if the user is a team staff member
+            team_id = self.kwargs.get('team_id')
+            membership = Membership.objects.get(team=team_id, user=request.user.id, isStaff=True)
+        except Membership.DoesNotExist:
+            return response.Response({"detail": "You are not a staff member of this team."}, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            return response.Response({"detail": "No submissions found for this user and exercise."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(queryset, many=True)
         return response.Response(serializer.data, status=status.HTTP_200_OK)
 
 

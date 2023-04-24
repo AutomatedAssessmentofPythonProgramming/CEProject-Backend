@@ -18,6 +18,7 @@ from .views import ( TeamViewSet,
                      GetExerciseByIdView,
                      UserSubmissionsView,
                      UpdateTeamWorkbookView,
+                     ExerciseUserSubmissionsView,
                     )
 
 urlpatterns = [
@@ -39,5 +40,6 @@ urlpatterns = [
     path('exercise/<int:exerciseId>/<int:teamId>', GetExerciseByIdView.as_view(), name='get-exercisebyid'),
     path('submissions/user/', UserSubmissionsView.as_view(), name='submissions-user'),
     path('teams/<int:team_id>/exercises/<int:exercise_id>/workbooks/', UpdateTeamWorkbookView.as_view(), name='update-workbook'),
+    path('exercises/<int:exercise_id>/users/<int:user_id>/teams/<int:team_id>/submissions/', ExerciseUserSubmissionsView.as_view(), name='exercise-user-team-submissions'),
 
 ]
