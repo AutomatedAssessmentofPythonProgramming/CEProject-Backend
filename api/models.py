@@ -25,6 +25,8 @@ class Exercise(models.Model):
     config_code = models.TextField(default='', blank=True)
     unittest = models.TextField(default='', blank=True)
     owner = models.ForeignKey(to=User, on_delete=models.CASCADE)
+    code_name = models.CharField(max_length=255, default='user_code')
+    example_code = models.TextField(default='', blank=True)
 
     class Meta:
         ordering = ['created']

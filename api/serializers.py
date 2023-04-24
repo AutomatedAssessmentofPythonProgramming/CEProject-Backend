@@ -63,7 +63,7 @@ class TeamSerializer(FlexFieldsModelSerializer):
 class ExerciseSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = Exercise
-        fields = ['id', 'title', 'instruction', 'created', 'source_code', 'updated', 'config_code', 'unittest']
+        fields = ['id', 'title', 'instruction', 'created', 'source_code', 'updated', 'config_code', 'unittest', 'example_code', 'code_name']
         expandable_fields = {
           'submissions': ('api.SubmissionSerializer', {'many': True}),
           'workbooks': ('api.WorkbookSerializer', {'many': True}),
@@ -145,6 +145,8 @@ class ExerciseWorkbookSerializer(serializers.Serializer):
     exercise_source_code = serializers.CharField(source='exercise.source_code')
     exercise_config_code = serializers.CharField(source='exercise.config_code')
     exercise_unittest = serializers.CharField(source='exercise.unittest')
+    exercise_code_name = serializers.CharField(source='exercise.code_name')
+    exercise_example_code = serializers.CharField(source='exercise.example_code')
     workbook_open_time = serializers.DateTimeField(source='openTime')
     workbook_due_time = serializers.DateTimeField(source='dueTime')
     workbook_is_open = serializers.BooleanField(source='isOpen')
@@ -178,6 +180,8 @@ class SubmissionSerializer(serializers.ModelSerializer):
     exercise_title = serializers.CharField(source='exercise.title')
     exercise_id = serializers.IntegerField(source='exercise.id')
     exercise_instruction = serializers.CharField(source='exercise.instruction')
+    exercise_code_name = serializers.CharField(source='exercise.code_name')
+    exercise_example_code = serializers.CharField(source='exercise.example_code')
     user_id = serializers.IntegerField(source='user.id')
     user_username = serializers.CharField(source='user.username')
     user_firstname = serializers.CharField(source='user.firstname')
@@ -185,7 +189,7 @@ class SubmissionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Submission
-        fields = ['id', 'exercise_title', 'exercise_id', 'exercise_instruction', 'user_id', 'user_username', 'user_firstname', 'user_lastname', 'dateSubmit', 'isLate', 'isDone', 'score', 'code']
+        fields = ['id', 'exercise_title', 'exercise_id', 'exercise_instruction', 'exercise_code_name', 'exercise_example_code', 'user_id', 'user_username', 'user_firstname', 'user_lastname', 'dateSubmit', 'isLate', 'isDone', 'score', 'code']
         
 class UserSubmissionRequestSerializer(serializers.Serializer):
     team_id = serializers.IntegerField()

@@ -555,10 +555,7 @@ class FileSubmissionView(generics.GenericAPIView):
 
             file_name = default_storage.save(file_name, uploaded_file)
             # print("Uploaded file name:", file_name)
-            # print("Uploaded file name:", file_name)
             
-            exercise = Exercise.objects.get(pk=exerciseId)
-            # print("Fetched exercise:", exercise)
             exercise = Exercise.objects.get(pk=exerciseId)
             # print("Fetched exercise:", exercise)
             
